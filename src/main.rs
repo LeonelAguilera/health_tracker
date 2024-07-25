@@ -1,11 +1,12 @@
 use std::convert::Infallible;
 use std::net::SocketAddr;
 
-use http_body_util::Full;
+use http_body_util::{Full, BodyExt, Empty};
+use http_body_util::combinators::BoxBody;
 use hyper::body::Bytes;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
-use hyper::{Request, Response};
+use hyper::{Request, Response, StatusCode, Method};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
 
@@ -31,7 +32,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 // Finally, we bind the incoming connection to our `hello` service
                 if let Err(err) = http1::Builder::new()
                     // `service_fn` converts our function in a `Service`
-                    .serve_connection(io, service_fn(hello))
+                    .serve_connection(io, service_fn(echo))
                         .await
                         {
                             eprintln!("Error serving connection: {:?}", err);
@@ -43,4 +44,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
 async fn hello(_: Request<hyper::body::Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
     Ok(Response::new(Full::new(Bytes::from("Hello, World!"))))
+}
+
+async fn echo(
+    req: Request<hyper::body::Incoming>,
+) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
+    match (req.method(), req.uri().path()) {
+        (&Method::GET, "/") => Ok(Response::new(full(
+            "Try POSTing data to /echo",
+        ))),
+        (&Method::POST, "/echo") => {
+            Ok(Response::new(req.into_body().boxed()))
+        },
+
+        // Return 404 Not Found for other routes.
+        _ => {
+            let mut not_found = Response::new(empty());
+            *not_found.status_mut() = StatusCode::NOT_FOUND;
+            Ok(not_found)
+        }
+    }
+}
+
+// We create some utility functions to make Empty and Full bodies
+// fit our broadened Response body type.
+fn empty() -> BoxBody<Bytes, hyper::Error> {
+    Empty::<Bytes>::new()
+        .map_err(|never| match never {})
+        .boxed()
+}
+fn full<T: Into<Bytes>>(chunk: T) -> BoxBody<Bytes, hyper::Error> {
+    Full::new(chunk.into())
+        .map_err(|never| match never {})
+        .boxed()
 }

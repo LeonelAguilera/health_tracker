@@ -1,14 +1,14 @@
-use std::convert::Infallible;
 use std::net::SocketAddr;
 
 use http_body_util::{Full, BodyExt, Empty};
 use http_body_util::combinators::BoxBody;
-use hyper::body::Bytes;
+use hyper::{Request, Response, StatusCode, Method};
+use hyper::body::{Body, Buf, Bytes};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
-use hyper::{Request, Response, StatusCode, Method};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
+use serde_json;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -42,13 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 }
 
-async fn hello(_: Request<hyper::body::Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
-    Ok(Response::new(Full::new(Bytes::from("Hello, World!"))))
-}
-
-async fn echo(
-    req: Request<hyper::body::Incoming>,
-) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
+async fn echo(req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
     match (req.method(), req.uri().path()) {
         (&Method::GET, "/") => Ok(Response::new(full(
             "Try POSTing data to /echo",
@@ -56,6 +50,36 @@ async fn echo(
         (&Method::POST, "/echo") => {
             Ok(Response::new(req.into_body().boxed()))
         },
+        (&Method::POST, "/echo/reversed") => {
+            // Protect our server from massive bodies.
+            let upper = req.body().size_hint().upper().unwrap_or(u64::MAX);
+            if upper > 1024 * 64 {
+                let mut resp = Response::new(full("Body too big"));
+                *resp.status_mut() = hyper::StatusCode::PAYLOAD_TOO_LARGE;
+                return Ok(resp);
+            }
+
+            // Await the whole body to be collected into a single `Bytes`...
+            let whole_body = req.collect().await?.to_bytes();
+
+            // Iterate the whole body in reverse order and collect into a new Vec.
+            let reversed_body = whole_body.iter()
+                .rev()
+                .cloned()
+                .collect::<Vec<u8>>();
+
+            Ok(Response::new(full(reversed_body)))
+        },
+        (&Method::POST, "/scale_data") => {
+            let received_data = req.into_body().collect().await?.aggregate();
+            let received_data: serde_json::Value = serde_json::from_reader(received_data.reader()).expect("Could not read JSON");
+            println!("{:#?}", received_data);
+            println!("\n\n\n{:?}\n", received_data["peso"].as_f64());
+
+            let mut not_found = Response::new(empty());
+            *not_found.status_mut() = StatusCode::NOT_FOUND;
+            Ok(not_found)
+        }
 
         // Return 404 Not Found for other routes.
         _ => {

@@ -49,8 +49,7 @@ async fn echo(req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<By
     match (req.method(), req.uri().path()) {
         (&Method::POST, "/scale_data") => {
             let received_data = req.into_body().collect().await?.aggregate();
-            let received_data: serde_json::Value = serde_json::from_reader(received_data.reader()).expect("Could not read JSON");
-            let received_data = Datos::build_from_json(received_data);
+            let received_data: Datos = serde_json::from_reader(received_data.reader()).expect("Could not read JSON");
 
             println!("\n\n\n{:#?}\n\n\n", received_data);
 

@@ -2,6 +2,11 @@ use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Datos{
+    year: f64,
+    month: f64,
+    day: f64,
+    hour: f64,
+    minute: f64,
     peso: Option<f64>,
     grasa_visceral: Option<f64>,
     grasa_corporal: Option<f64>,

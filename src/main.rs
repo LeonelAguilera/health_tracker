@@ -1,5 +1,6 @@
 mod data;
 
+use std::fs::OpenOptions;
 use std::net::SocketAddr;
 
 use http_body_util::{BodyExt, Empty};
@@ -51,7 +52,18 @@ async fn echo(req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<By
             let received_data = req.into_body().collect().await?.aggregate();
             let received_data: Datos = serde_json::from_reader(received_data.reader()).expect("Could not read JSON");
 
-            println!("\n\n\n{:#?}\n\n\n", received_data);
+            let file = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .append(true)
+                .open("health_data.csv")
+                .unwrap();
+            let mut wtr = csv::WriterBuilder::new()
+                .has_headers(false)
+                .from_writer(file);
+            wtr.serialize(received_data).unwrap();
+            wtr.flush().unwrap();
+
 
             let mut done = Response::new(empty());
             *done.status_mut() = StatusCode::OK;

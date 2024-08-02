@@ -3,16 +3,18 @@ mod data;
 use std::fs::OpenOptions;
 use std::net::SocketAddr;
 
-use http_body_util::{BodyExt, Empty};
+use http_body_util::{BodyExt, Empty, Full};
 use http_body_util::combinators::BoxBody;
-use hyper::{Request, Response, StatusCode, Method};
+use hyper::{header, Method, Request, Response, StatusCode};
 use hyper::body::{Buf, Bytes};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
+//use serde::Serialize;
 use tokio::net::TcpListener;
 use serde_json;
 use data::Datos;
+use chrono::{self, DateTime, Local, NaiveDate, TimeZone, Utc};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -70,6 +72,31 @@ async fn echo(req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<By
             Ok(done)
         }
 
+        (&Method::GET, "/scale_data") => {
+            let current_date = chrono::offset::Utc::now();
+            let mut rdr = csv::Reader::from_path("health_data.csv").expect("Archivo no encontrado");
+
+            let mut historico: Vec<Datos> = vec![];
+            for result in rdr.deserialize() {
+                let linea_datos: Datos = result.expect("No fue posible parsear el objeto");
+                let fecha_datos = Utc.with_ymd_and_hms(linea_datos.year, linea_datos.month, linea_datos.day, linea_datos.hour, linea_datos.minute, 0).unwrap();
+                let is_recent: bool = (current_date - fecha_datos).num_days() <= 7;
+
+                if is_recent{
+                    historico.push(linea_datos);
+                }
+            }
+            println!("{:#?}", historico);
+
+            let historico = serde_json::to_string(&historico).expect("No se pudo convertir el vector a string");
+            let done = Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, "scale_data/json")
+                .body(full(historico)).expect("No se pudo generar respuesta");
+            Ok(done)
+
+        }
+
         // Return 404 Not Found for other routes.
         _ => {
             let mut not_found = Response::new(empty());
@@ -83,6 +110,12 @@ async fn echo(req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<By
 // fit our broadened Response body type.
 fn empty() -> BoxBody<Bytes, hyper::Error> {
     Empty::<Bytes>::new()
+        .map_err(|never| match never {})
+        .boxed()
+}
+
+fn full<T: Into<Bytes>>(chunk: T) -> BoxBody<Bytes, hyper::Error> {
+    Full::new(chunk.into())
         .map_err(|never| match never {})
         .boxed()
 }

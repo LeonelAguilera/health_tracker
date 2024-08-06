@@ -1,4 +1,5 @@
 mod data;
+mod graph_builder;
 
 use std::fs::OpenOptions;
 use std::net::SocketAddr;
@@ -13,8 +14,10 @@ use hyper_util::rt::TokioIo;
 //use serde::Serialize;
 use tokio::net::TcpListener;
 use serde_json;
-use data::Datos;
+use data::{Datos, DatosConFecha};
 use chrono::{self, DateTime, Local, NaiveDate, TimeZone, Utc};
+
+use graph_builder::basic_graph_builder;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -52,7 +55,7 @@ async fn echo(req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<By
     match (req.method(), req.uri().path()) {
         (&Method::POST, "/scale_data") => {
             let received_data = req.into_body().collect().await?.aggregate();
-            let received_data: Datos = serde_json::from_reader(received_data.reader()).expect("Could not read JSON");
+            let mut received_data: Datos = serde_json::from_reader(received_data.reader()).expect("Could not read JSON");
 
             let file = OpenOptions::new()
                 .write(true)
@@ -61,8 +64,10 @@ async fn echo(req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<By
                 .open("health_data.csv")
                 .unwrap();
             let mut wtr = csv::WriterBuilder::new()
-                .has_headers(false)
+                .has_headers(true)
                 .from_writer(file);
+
+            received_data.timestamp = Some(chrono::offset::Utc::now().timestamp());
             wtr.serialize(received_data).unwrap();
             wtr.flush().unwrap();
 
@@ -73,26 +78,12 @@ async fn echo(req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<By
         }
 
         (&Method::GET, "/scale_data") => {
-            let current_date = chrono::offset::Utc::now();
             let mut rdr = csv::Reader::from_path("health_data.csv").expect("Archivo no encontrado");
 
-            let mut historico: Vec<Datos> = vec![];
-            for result in rdr.deserialize() {
-                let linea_datos: Datos = result.expect("No fue posible parsear el objeto");
-                let fecha_datos = Utc.with_ymd_and_hms(linea_datos.year, linea_datos.month, linea_datos.day, linea_datos.hour, linea_datos.minute, 0).unwrap();
-                let is_recent: bool = (current_date - fecha_datos).num_days() <= 7;
+            basic_graph_builder(vec![0.0,1.0,2.0]).save("test.png").unwrap();
 
-                if is_recent{
-                    historico.push(linea_datos);
-                }
-            }
-            println!("{:#?}", historico);
-
-            let historico = serde_json::to_string(&historico).expect("No se pudo convertir el vector a string");
-            let done = Response::builder()
-                .status(StatusCode::OK)
-                .header(header::CONTENT_TYPE, "scale_data/json")
-                .body(full(historico)).expect("No se pudo generar respuesta");
+            let mut done = Response::new(empty());
+            *done.status_mut() = StatusCode::OK;
             Ok(done)
 
         }

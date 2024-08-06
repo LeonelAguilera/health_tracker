@@ -54,38 +54,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 async fn echo(req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
     match (req.method(), req.uri().path()) {
         (&Method::POST, "/scale_data") => {
-            let received_data = req.into_body().collect().await?.aggregate();
-            let mut received_data: Datos = serde_json::from_reader(received_data.reader()).expect("Could not read JSON");
-
-            let file = OpenOptions::new()
-                .write(true)
-                .create(true)
-                .append(true)
-                .open("health_data.csv")
-                .unwrap();
-            let mut wtr = csv::WriterBuilder::new()
-                .has_headers(true)
-                .from_writer(file);
-
-            received_data.timestamp = Some(chrono::offset::Utc::now().timestamp());
-            wtr.serialize(received_data).unwrap();
-            wtr.flush().unwrap();
-
-
-            let mut done = Response::new(empty());
-            *done.status_mut() = StatusCode::OK;
-            Ok(done)
+            save_health_data(req).await
         }
 
         (&Method::GET, "/scale_data") => {
-            let mut rdr = csv::Reader::from_path("health_data.csv").expect("Archivo no encontrado");
-
-            basic_graph_builder(vec![0.0,1.0,2.0]).save("test.png").unwrap();
-
-            let mut done = Response::new(empty());
-            *done.status_mut() = StatusCode::OK;
-            Ok(done)
-
+            read_health_data(req).await
         }
 
         // Return 404 Not Found for other routes.
@@ -96,6 +69,46 @@ async fn echo(req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<By
         }
     }
 }
+async fn save_health_data(req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
+    let received_data = req.into_body().collect().await?.aggregate();
+    let mut received_data: Datos = serde_json::from_reader(received_data.reader()).expect("Could not read JSON");
+
+    let file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .append(true)
+        .open("health_data.csv")
+        .unwrap();
+    let mut wtr = csv::WriterBuilder::new()
+        .has_headers(false)
+        .from_writer(file);
+
+    received_data.timestamp = Some(chrono::offset::Utc::now().timestamp());
+    wtr.serialize(received_data).unwrap();
+    wtr.flush().unwrap();
+
+    dummy_ok()
+}
+
+async fn read_health_data(_req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
+    let mut rdr = csv::Reader::from_path("health_data.csv").expect("Archivo no encontrado");
+
+    let mut health_data: Vec<Datos> = vec![];
+
+    for result in rdr.deserialize() {
+        let datos: Datos = result.unwrap();
+
+        if datos.is_recent()
+        {
+            health_data.push(datos);
+        }
+    }
+
+
+    basic_graph_builder(vec![0.0,1.0,2.0]).save("test.png").unwrap();
+
+    dummy_ok()
+}
 
 // We create some utility functions to make Empty and Full bodies
 // fit our broadened Response body type.
@@ -105,8 +118,15 @@ fn empty() -> BoxBody<Bytes, hyper::Error> {
         .boxed()
 }
 
-fn full<T: Into<Bytes>>(chunk: T) -> BoxBody<Bytes, hyper::Error> {
-    Full::new(chunk.into())
-        .map_err(|never| match never {})
-        .boxed()
+//fn full<T: Into<Bytes>>(chunk: T) -> BoxBody<Bytes, hyper::Error> {
+//    Full::new(chunk.into())
+//        .map_err(|never| match never {})
+//        .boxed()
+//}
+
+fn dummy_ok() -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
+    let mut done = Response::new(empty());
+    *done.status_mut() = StatusCode::OK;
+    Ok(done)
 }
+

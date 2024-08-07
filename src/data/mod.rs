@@ -4,15 +4,15 @@ use chrono::{self, DateTime, Utc};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Datos{
     pub timestamp: Option<i64>,
-    peso: Option<f64>,
-    grasa_visceral: Option<f64>,
-    grasa_corporal: Option<f64>,
-    musculo: Option<f64>,
-    agua: Option<f64>,
-    proteina: Option<f64>,
-    metabolismo_basal: Option<f64>,
-    masa_osea: Option<f64>,
-    diametro_cintura: Option<f64>,
+    pub peso: Option<f64>,
+    pub grasa_visceral: Option<f64>,
+    pub grasa_corporal: Option<f64>,
+    pub musculo: Option<f64>,
+    pub agua: Option<f64>,
+    pub proteina: Option<f64>,
+    pub metabolismo_basal: Option<f64>,
+    pub masa_osea: Option<f64>,
+    pub diametro_cintura: Option<f64>,
 }
 
 impl Datos {

@@ -72,6 +72,7 @@ async fn echo(req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<By
 async fn save_health_data(req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
     let received_data = req.into_body().collect().await?.aggregate();
     let mut received_data: Datos = serde_json::from_reader(received_data.reader()).expect("Could not read JSON");
+    received_data.timestamp = Some(chrono::offset::Local::now().timestamp());
 
     let file = OpenOptions::new()
         .write(true)
@@ -79,13 +80,12 @@ async fn save_health_data(req: Request<hyper::body::Incoming>) -> Result<Respons
         .append(true)
         .open("health_data.csv")
         .unwrap();
-    let mut wtr = csv::WriterBuilder::new()
+    let mut file = csv::WriterBuilder::new()
         .has_headers(false)
         .from_writer(file);
 
-    received_data.timestamp = Some(chrono::offset::Utc::now().timestamp());
-    wtr.serialize(received_data).unwrap();
-    wtr.flush().unwrap();
+    file.serialize(received_data).unwrap();
+    file.flush().unwrap();
 
     dummy_ok()
 }
@@ -103,9 +103,94 @@ async fn read_health_data(_req: Request<hyper::body::Incoming>) -> Result<Respon
             health_data.push(datos);
         }
     }
+    
+    let mut peso: Vec<DatosConFecha> = vec![];
+    let mut grasa_visceral: Vec<DatosConFecha> = vec![];
+    let mut grasa_corporal: Vec<DatosConFecha> = vec![];
+    let mut musculo: Vec<DatosConFecha> = vec![];
+    let mut agua: Vec<DatosConFecha> = vec![];
+    let mut proteina: Vec<DatosConFecha> = vec![];
+    let mut metabolismo_basal: Vec<DatosConFecha> = vec![];
+    let mut masa_osea: Vec<DatosConFecha> = vec![];
+    let mut diametro_cintura: Vec<DatosConFecha> = vec![];
+    for dato in health_data
+    {
+        if let Some(peso_s) = dato.peso
+        {
+            peso.push(DatosConFecha{
+                timestamp: dato.timestamp.unwrap(),
+                datos: peso_s,
+            }
+            );
+        }
+        if let Some(grasa_visceral_s) = dato.grasa_visceral
+        {
+            grasa_visceral.push(DatosConFecha{
+                timestamp: dato.timestamp.unwrap(),
+                datos: grasa_visceral_s,
+            }
+            );
+        }
+        if let Some(grasa_corporal_s) = dato.grasa_corporal
+        {
+            grasa_corporal.push(DatosConFecha{
+                timestamp: dato.timestamp.unwrap(),
+                datos: grasa_corporal_s,
+            }
+            );
+        }
+        if let Some(musculo_s) = dato.musculo
+        {
+            musculo.push(DatosConFecha{
+                timestamp: dato.timestamp.unwrap(),
+                datos: musculo_s,
+            }
+            );
+        }
+        if let Some(agua_s) = dato.agua
+        {
+            agua.push(DatosConFecha{
+                timestamp: dato.timestamp.unwrap(),
+                datos: agua_s,
+            }
+            );
+        }
+        if let Some(proteina_s) = dato.proteina
+        {
+            proteina.push(DatosConFecha{
+                timestamp: dato.timestamp.unwrap(),
+                datos: proteina_s,
+            }
+            );
+        }
+        if let Some(metabolismo_basal_s) = dato.metabolismo_basal
+        {
+            metabolismo_basal.push(DatosConFecha{
+                timestamp: dato.timestamp.unwrap(),
+                datos: metabolismo_basal_s,
+            }
+            );
+        }
+        if let Some(masa_osea_s) = dato.masa_osea
+        {
+            masa_osea.push(DatosConFecha{
+                timestamp: dato.timestamp.unwrap(),
+                datos: masa_osea_s,
+            }
+            );
+        }
+        if let Some(diametro_cintura_s) = dato.diametro_cintura
+        {
+            diametro_cintura.push(DatosConFecha{
+                timestamp: dato.timestamp.unwrap(),
+                datos: diametro_cintura_s,
+            }
+            );
+        }
+    }
 
 
-    basic_graph_builder(vec![0.0,1.0,2.0]).save("test.png").unwrap();
+    basic_graph_builder(peso).save("test.png").unwrap();
 
     dummy_ok()
 }

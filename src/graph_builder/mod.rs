@@ -2,8 +2,9 @@ use chrono::{DateTime, Datelike, Local, TimeZone};
 use image::{self, RgbImage};
 use crate::data::DatosConFecha;
 
-const LIGHT_LINE_COLOR: (u8, u8, u8) = (85, 85, 85);
-const DARK_LINE_COLOR: (u8, u8, u8) = (170, 170, 170);
+const DEBUG_COLOR: (u8, u8, u8) = (255, 0, 255);
+const LIGHT_LINE_COLOR: (u8, u8, u8) = (170, 170, 170);
+const DARK_LINE_COLOR: (u8, u8, u8) = (85, 85, 85);
 const LIGHT_POINT_COLOR: (u8, u8, u8) = (160, 160, 200);
 const DARK_POINT_COLOR: (u8, u8, u8) = (50, 50, 210);
 
@@ -21,7 +22,6 @@ impl Datapoint {
             x: (1080*(data.timestamp - x_start)/(x_end - x_start)) as i64,
             y: (1080.0 - 1080.0*(data.datos - y_start)/(y_end - y_start)) as i64,
         };
-        //println!("{:#?}", outputval);
         return  outputval;
     }
 }
@@ -32,14 +32,13 @@ pub fn basic_graph_builder(data: Vec<DatosConFecha>) -> RgbImage{
     let start_date = DateTime::from_timestamp(data[0].timestamp, 0).unwrap();
     let start_timestamp = i64::min(Local.with_ymd_and_hms(start_date.year(), start_date.month(), start_date.day(), 0, 0, 0).unwrap().timestamp(), end_timestamp - 7*24*3600);
     let (min_val, max_val) = get_min_max(&data);
-    println!("min: {}, max: {}", min_val, max_val);
     let delta = max_val - min_val;
-    println!("Delta: {}", delta);
 
     let data: Vec<Datapoint> = data.into_iter().map(|dato| Datapoint::build(dato, start_timestamp, end_timestamp, min_val - delta*0.05, max_val + delta*0.05)).collect();
 
     let mut graph = basic_graph_canvas(1080, 1080);
     graph = draw_horizontal_lines(graph, min_val, delta*1.1);
+    graph = draw_linear_interpolation(graph, &data, 3);
     graph = draw_points(graph, &data, 5);
 
     return graph;
@@ -52,27 +51,59 @@ fn draw_horizontal_lines(canvas: RgbImage, min_val: f64, delta: f64) -> RgbImage
     let mut canvas = canvas.into_raw();
 
     let number_of_horizontal_lines = f64::ceil(delta) as i64;
-    println!("number of hlines: {}", number_of_horizontal_lines);
     let line_separation = 1080.0/delta;
-    println!("Line separation: {}", line_separation);
     let pad_offset = (line_separation * delta * 0.04545) as i64;
     let number_offset = (line_separation*((f64::ceil(min_val) - min_val)/delta)) as i64;
     let first_line_spacing =  pad_offset + number_offset;
-    println!("pad offset: {pad_offset}");
-    println!("number offset: {}", number_offset);
-    println!("First line spacing: {}", first_line_spacing);
 
     for i in 0..number_of_horizontal_lines
     {
         for x in 0..width
         {   
             let y = (1079 - (i*line_separation as i64 + first_line_spacing)) * width;
+            if y < 0
+            {
+                return RgbImage::from_raw(width as u32, height as u32, canvas).unwrap();
+            }
             let index = ((x + y)*3) as usize;
             canvas[index + 0] = LIGHT_LINE_COLOR.0;
             canvas[index + 1] = LIGHT_LINE_COLOR.1;
             canvas[index + 2] = LIGHT_LINE_COLOR.2;
         }
     }
+    return RgbImage::from_raw(width as u32, height as u32, canvas).unwrap();
+}
+
+fn draw_linear_interpolation(canvas: RgbImage, data: &Vec<Datapoint>, line_width: i64) -> RgbImage
+{
+    let width = canvas.width() as i64;
+    let height = canvas.height() as i64;
+    let mut canvas = canvas.into_raw();
+
+    for data_index in 0..(data.len() - 1)
+    {
+        for x in 0..width
+        {
+            for y in 0..height
+            {
+                if x < data[data_index].x || x > data[data_index + 1].x
+                {
+                    continue;
+                }
+
+                let pendiente = (data[data_index + 1].y - data[data_index].y) as f64 / (data[data_index + 1].x - data[data_index].x) as f64;
+                let line_y = (pendiente * (x - data[data_index].x) as f64) as i64 + data[data_index].y;
+
+                if i64::abs(y - line_y) <= line_width/2
+                {
+                    canvas[((x + y*width)*3 + 0) as usize] = DARK_POINT_COLOR.0;
+                    canvas[((x + y*width)*3 + 1) as usize] = DARK_POINT_COLOR.1;
+                    canvas[((x + y*width)*3 + 2) as usize] = DARK_POINT_COLOR.2;
+                }
+            }
+        }
+    }
+
     return RgbImage::from_raw(width as u32, height as u32, canvas).unwrap();
 }
 
@@ -154,29 +185,29 @@ fn basic_graph_canvas(width: u32, height: u32) -> RgbImage{
 
             if primary_line_center == 10*(segment_separation/24)
             {
-                image_vec[(x*3 + 0 + width*3*y) as usize] = DARK_LINE_COLOR.0; 
-                image_vec[(x*3 + 1 + width*3*y) as usize] = DARK_LINE_COLOR.1; 
-                image_vec[(x*3 + 2 + width*3*y) as usize] = DARK_LINE_COLOR.2;
+                image_vec[(x*3 + 0 + width*3*y) as usize] = LIGHT_LINE_COLOR.0; 
+                image_vec[(x*3 + 1 + width*3*y) as usize] = LIGHT_LINE_COLOR.1; 
+                image_vec[(x*3 + 2 + width*3*y) as usize] = LIGHT_LINE_COLOR.2;
             }
 
             if primary_line_center == (33*segment_separation)/48{
 
-                image_vec[(x*3 + 0 + width*3*y) as usize] = DARK_LINE_COLOR.0; 
-                image_vec[(x*3 + 1 + width*3*y) as usize] = DARK_LINE_COLOR.1; 
-                image_vec[(x*3 + 2 + width*3*y) as usize] = DARK_LINE_COLOR.2;
+                image_vec[(x*3 + 0 + width*3*y) as usize] = LIGHT_LINE_COLOR.0; 
+                image_vec[(x*3 + 1 + width*3*y) as usize] = LIGHT_LINE_COLOR.1; 
+                image_vec[(x*3 + 2 + width*3*y) as usize] = LIGHT_LINE_COLOR.2;
             }
 
             if primary_line_center == 18*(segment_separation/24){
-                image_vec[(x*3 + 0 + width*3*y) as usize] = DARK_LINE_COLOR.0; 
-                image_vec[(x*3 + 1 + width*3*y) as usize] = DARK_LINE_COLOR.1; 
-                image_vec[(x*3 + 2 + width*3*y) as usize] = DARK_LINE_COLOR.2; 
+                image_vec[(x*3 + 0 + width*3*y) as usize] = LIGHT_LINE_COLOR.0; 
+                image_vec[(x*3 + 1 + width*3*y) as usize] = LIGHT_LINE_COLOR.1; 
+                image_vec[(x*3 + 2 + width*3*y) as usize] = LIGHT_LINE_COLOR.2; 
             }
 
             if primary_line_center == 20*(segment_separation/24)
             {
-                image_vec[(x*3 + 0 + width*3*y) as usize] = DARK_LINE_COLOR.0; 
-                image_vec[(x*3 + 1 + width*3*y) as usize] = DARK_LINE_COLOR.1; 
-                image_vec[(x*3 + 2 + width*3*y) as usize] = DARK_LINE_COLOR.2;
+                image_vec[(x*3 + 0 + width*3*y) as usize] = LIGHT_LINE_COLOR.0; 
+                image_vec[(x*3 + 1 + width*3*y) as usize] = LIGHT_LINE_COLOR.1; 
+                image_vec[(x*3 + 2 + width*3*y) as usize] = LIGHT_LINE_COLOR.2;
             }
         }
     }

@@ -4,9 +4,9 @@ mod graph_builder;
 use std::fs::OpenOptions;
 use std::net::SocketAddr;
 
-use http_body_util::{BodyExt, Empty, Full};
+use http_body_util::{BodyExt, Empty};
 use http_body_util::combinators::BoxBody;
-use hyper::{header, Method, Request, Response, StatusCode};
+use hyper::{Method, Request, Response, StatusCode};
 use hyper::body::{Buf, Bytes};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
@@ -15,7 +15,7 @@ use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
 use serde_json;
 use data::{Datos, DatosConFecha};
-use chrono::{self, DateTime, Local, NaiveDate, TimeZone, Utc};
+use chrono;
 
 use graph_builder::basic_graph_builder;
 

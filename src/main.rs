@@ -65,7 +65,7 @@ async fn echo(req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<By
         (&Method::GET, "/scale_data") => {
             read_health_data(req).await
         }
-
+        (&Method::GET, path) if path.starts_with("/graphs/") => simple_file_send(remove_first(path).expect("No pude eliminar el primer caracter")).await,
         // Return 404 Not Found for other routes.
         _ => {
             Ok(not_found())
@@ -113,21 +113,10 @@ async fn read_health_data(_req: Request<hyper::body::Incoming>) -> Result<Respon
     
     simple_file_send("index_t.html").await
 }
-async fn chatgpt_file_send(filename: &str) ->Result<Response<BoxBody<Bytes, std::io::Error>>, hyper::Error>
-{
-    match read_to_string(filename).await {
-        Ok(content) => Ok(Response::builder()
-                          .header("Content-Type", "text/html")
-                          .body(Body::from(content))
-                          .unwrap()),
-        Err(_) => Ok(Response::builder()
-                     .status(404)
-                     .body(Body::from("File not found"))
-                     .unwrap()),
-    }
-}
+
 async fn simple_file_send(filename: &str) ->Result<Response<BoxBody<Bytes, std::io::Error>>, hyper::Error> {
     // Open file for reading
+    println!("{filename}");
     let file = File::open(filename).await;
     if file.is_err() {
         eprintln!("ERROR: Unable to open file.");
@@ -151,6 +140,11 @@ async fn simple_file_send(filename: &str) ->Result<Response<BoxBody<Bytes, std::
 
     Ok(response)
 }
+
+//async fn serve_image(path: &str) -> Result<Response<BoxBody<Bytes, std::io::Error>>, hyper::Error>
+//{
+//
+//}
 
 fn make_graphs(health_data: Vec<Datos>)
 {
@@ -277,4 +271,8 @@ fn not_found() ->Response<BoxBody<Bytes, std::io::Error>> {
         .status(StatusCode::NOT_FOUND)
         .body(Full::new(String::from("Not Found").into()).map_err(|e| match e {}).boxed())
         .unwrap()
+}
+
+fn remove_first(s: &str) -> Option<&str> {
+    s.chars().next().map(|c| &s[c.len_utf8()..])
 }

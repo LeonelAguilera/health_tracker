@@ -4,15 +4,20 @@ mod graph_builder;
 use std::fs::OpenOptions;
 use std::net::SocketAddr;
 
-use http_body_util::{BodyExt, Empty};
+use http_body_util::{BodyExt, Empty, Full, StreamBody};
 use http_body_util::combinators::BoxBody;
 use hyper::{Method, Request, Response, StatusCode};
-use hyper::body::{Buf, Bytes};
+use hyper::body::{Buf, Bytes, Frame, Body};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
 //use serde::Serialize;
 use tokio::net::TcpListener;
+use tokio::fs::{File, read_to_string};
+use tokio_util::io::ReaderStream;
+
+use futures_util::TryStreamExt;
+
 use serde_json;
 use data::{Datos, DatosConFecha};
 use chrono;
@@ -51,7 +56,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 }
 
-async fn echo(req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
+async fn echo(req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<Bytes, std::io::Error>>, hyper::Error> {
     match (req.method(), req.uri().path()) {
         (&Method::POST, "/scale_data") => {
             save_health_data(req).await
@@ -63,13 +68,11 @@ async fn echo(req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<By
 
         // Return 404 Not Found for other routes.
         _ => {
-            let mut not_found = Response::new(empty());
-            *not_found.status_mut() = StatusCode::NOT_FOUND;
-            Ok(not_found)
+            Ok(not_found())
         }
     }
 }
-async fn save_health_data(req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
+async fn save_health_data(req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<Bytes, std::io::Error>>, hyper::Error> {
     let received_data = req.into_body().collect().await?.aggregate();
     let mut received_data: Datos = serde_json::from_reader(received_data.reader()).expect("Could not read JSON");
     received_data.timestamp = Some(chrono::offset::Local::now().timestamp());
@@ -90,7 +93,8 @@ async fn save_health_data(req: Request<hyper::body::Incoming>) -> Result<Respons
     dummy_ok()
 }
 
-async fn read_health_data(_req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
+
+async fn read_health_data(_req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<Bytes, std::io::Error>>, hyper::Error> {
     let mut rdr = csv::Reader::from_path("health_data.csv").expect("Archivo no encontrado");
 
     let mut health_data: Vec<Datos> = vec![];
@@ -103,7 +107,53 @@ async fn read_health_data(_req: Request<hyper::body::Incoming>) -> Result<Respon
             health_data.push(datos);
         }
     }
+    make_graphs(health_data);
+
+    //let content = read_to_string("index.html").await.unwrap_or_else(|_| "File not found".to_string());
     
+    simple_file_send("index_t.html").await
+}
+async fn chatgpt_file_send(filename: &str) ->Result<Response<BoxBody<Bytes, std::io::Error>>, hyper::Error>
+{
+    match read_to_string(filename).await {
+        Ok(content) => Ok(Response::builder()
+                          .header("Content-Type", "text/html")
+                          .body(Body::from(content))
+                          .unwrap()),
+        Err(_) => Ok(Response::builder()
+                     .status(404)
+                     .body(Body::from("File not found"))
+                     .unwrap()),
+    }
+}
+async fn simple_file_send(filename: &str) ->Result<Response<BoxBody<Bytes, std::io::Error>>, hyper::Error> {
+    // Open file for reading
+    let file = File::open(filename).await;
+    if file.is_err() {
+        eprintln!("ERROR: Unable to open file.");
+        return Ok(not_found());
+    }
+
+    let file: File = file.unwrap();
+
+    // Wrap to a tokio_util::io::ReaderStream
+    let reader_stream = ReaderStream::new(file);
+
+    // Convert to http_body_util::BoxBody
+    let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
+    let boxed_body = stream_body.boxed();
+
+    // Send response
+    let response = Response::builder()
+        .status(StatusCode::OK)
+        .body(boxed_body)
+        .unwrap();
+
+    Ok(response)
+}
+
+fn make_graphs(health_data: Vec<Datos>)
+{
     let mut peso: Vec<DatosConFecha> = vec![];
     let mut grasa_visceral: Vec<DatosConFecha> = vec![];
     let mut grasa_corporal: Vec<DatosConFecha> = vec![];
@@ -188,30 +238,43 @@ async fn read_health_data(_req: Request<hyper::body::Incoming>) -> Result<Respon
             );
         }
     }
-
-
-    basic_graph_builder(peso).save("test.png").unwrap();
-
-    dummy_ok()
+    basic_graph_builder(peso).save("graphs/peso.png").unwrap();
+    basic_graph_builder(grasa_visceral).save("graphs/grasa_visceral.png").unwrap();
+    basic_graph_builder(grasa_corporal).save("graphs/grasa_corporal.png").unwrap();
+    basic_graph_builder(musculo).save("graphs/musculo.png").unwrap();
+    basic_graph_builder(agua).save("graphs/agua.png").unwrap();
+    basic_graph_builder(proteina).save("graphs/proteina.png").unwrap();
+    basic_graph_builder(metabolismo_basal).save("graphs/metabolismo_basal.png").unwrap();
+    basic_graph_builder(masa_osea).save("graphs/masa_osea.png").unwrap();
+    basic_graph_builder(diametro_cintura).save("graphs/diametro_cintura.png").unwrap();
 }
 
 // We create some utility functions to make Empty and Full bodies
 // fit our broadened Response body type.
-fn empty() -> BoxBody<Bytes, hyper::Error> {
-    Empty::<Bytes>::new()
-        .map_err(|never| match never {})
-        .boxed()
-}
-
+//fn empty() -> BoxBody<Bytes, hyper::Error> {
+//    Empty::<Bytes>::new()
+//        .map_err(|never| match never {})
+//        .boxed()
+//}
+//
 //fn full<T: Into<Bytes>>(chunk: T) -> BoxBody<Bytes, hyper::Error> {
 //    Full::new(chunk.into())
 //        .map_err(|never| match never {})
 //        .boxed()
 //}
 
-fn dummy_ok() -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
-    let mut done = Response::new(empty());
-    *done.status_mut() = StatusCode::OK;
-    Ok(done)
+fn dummy_ok() -> Result<Response<BoxBody<Bytes, std::io::Error>>, hyper::Error> {
+    Ok(
+        Response::builder()
+        .status(StatusCode::OK)
+        .body(Full::new(String::from("").into()).map_err(|e| match e {}).boxed())
+        .unwrap()
+      )
 }
 
+fn not_found() ->Response<BoxBody<Bytes, std::io::Error>> {
+    Response::builder()
+        .status(StatusCode::NOT_FOUND)
+        .body(Full::new(String::from("Not Found").into()).map_err(|e| match e {}).boxed())
+        .unwrap()
+}

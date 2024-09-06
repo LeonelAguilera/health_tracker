@@ -36,6 +36,7 @@ impl Datapoint {
 }
 
 pub fn basic_graph_builder(data: Vec<DatosConFecha>) -> RgbImage{
+    //println!("{:#?}", data);
     let end_date = DateTime::from_timestamp(data.last().unwrap().timestamp, 0).unwrap();
     let end_timestamp = Local.with_ymd_and_hms(end_date.year(), end_date.month(), end_date.day(), 23, 59, 59).unwrap().timestamp();
     let start_date = DateTime::from_timestamp(data[0].timestamp, 0).unwrap();

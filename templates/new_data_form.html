@@ -1,0 +1,30 @@
+<form hx-post="/update" hx-include="#form-container">
+    <label for="peso">Weight:</label>
+    <input type="number" id="peso" name="peso" step="0.01" required><br>
+    <label for="grasa_visceral">Visceral Fat:</label>
+    <input type="number" id="grasa_visceral" name="grasa_visceral" step="0.01" required><br>
+    <label for="grasa_corporal">Fat:</label>
+    <input type="number" id="grasa_corporal" name="grasa_corporal" step="0.01" required><br>
+    <label for="musculo">Muscle:</label>
+    <input type="number" id="musculo" name="musculo" step="0.01" required><br>
+    <label for="agua">Water:</label>
+    <input type="number" id="agua" name="agua" step="0.01" required><br>
+    <label for="proteina">Protein:</label>
+    <input type="number" id="proteina" name="proteina" step="0.01" required><br>
+    <label for="metabolismo">Metabolism:</label>
+    <input type="number" id="metabolismo" name="metabolismo" step="0.01" required><br>
+    <label for="masa_osea">Bone Mass:</label>
+    <input type="number" id="masa_osea" name="masa_osea" step="0.01" required><br>
+    <label for="diametro_cintura">Hip Diameter:</label>
+    <input type="number" id="diametro_cintura" name="diametro_cintura" step="0.01" required><br>
+    <input type="submit" value="Submit">
+</form>
+
+<script>
+function refreshGraphs() {
+    const metrics = ["weight", "grasa_visceral", "grasa_corporal", "musculo", "agua", "proteina", "metabolismo", "masa_osea", "diametro_cintura"];
+    metrics.forEach(metric => {
+        document.getElementById(metric + '-graph').src = '/graphs/' + metric + '.png?rand=' + Math.random();
+    });
+}
+</script>

@@ -2,7 +2,9 @@ mod data;
 mod graph_builder;
 
 use std::fs::OpenOptions;
+use std::io::Read;
 use std::net::SocketAddr;
+use std::str;
 
 use http_body_util::{BodyExt, Empty, Full, StreamBody};
 use http_body_util::combinators::BoxBody;
@@ -18,7 +20,6 @@ use tokio_util::io::ReaderStream;
 
 use futures_util::TryStreamExt;
 
-use serde_json;
 use data::{Datos, DatosConFecha};
 use chrono;
 
@@ -57,14 +58,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 }
 
 async fn echo(req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<Bytes, std::io::Error>>, hyper::Error> {
+    println!("Request made: {:#?}", (req.method(), req.uri().path()));
     match (req.method(), req.uri().path()) {
-        (&Method::POST, "/scale_data") => {
+        (&Method::POST, "/update") => {
             save_health_data(req).await
         }
 
         (&Method::GET, "/scale_data") => {
             read_health_data(req).await
         }
+
+        (&Method::GET, "/new_data_form") => {
+            simple_file_send("templates/new_data_form.html").await
+        }
+
         (&Method::GET, path) if path.starts_with("/graphs/") => simple_file_send(remove_first(path).expect("No pude eliminar el primer caracter")).await,
         // Return 404 Not Found for other routes.
         _ => {
@@ -73,8 +80,15 @@ async fn echo(req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<By
     }
 }
 async fn save_health_data(req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<Bytes, std::io::Error>>, hyper::Error> {
-    let received_data = req.into_body().collect().await?.aggregate();
-    let mut received_data: Datos = serde_json::from_reader(received_data.reader()).expect("Could not read JSON");
+    let received_data = req
+        .into_body()
+        .collect()
+        .await?
+        .to_bytes();
+    let mut received_data: Datos = Datos::deserialize(
+        std::string::String::from_utf8(
+            received_data.to_vec()
+            ).expect("Datos recibidos corruptos\n") + "&");
     received_data.timestamp = Some(chrono::offset::Local::now().timestamp());
 
     let file = OpenOptions::new()
@@ -102,7 +116,7 @@ async fn read_health_data(_req: Request<hyper::body::Incoming>) -> Result<Respon
     for result in rdr.deserialize() {
         let datos: Datos = result.unwrap();
 
-        if datos.is_recent()
+        //if datos.is_recent()
         {
             health_data.push(datos);
         }
@@ -116,7 +130,6 @@ async fn read_health_data(_req: Request<hyper::body::Incoming>) -> Result<Respon
 
 async fn simple_file_send(filename: &str) ->Result<Response<BoxBody<Bytes, std::io::Error>>, hyper::Error> {
     // Open file for reading
-    println!("{filename}");
     let file = File::open(filename).await;
     if file.is_err() {
         eprintln!("ERROR: Unable to open file.");
@@ -159,78 +172,92 @@ fn make_graphs(health_data: Vec<Datos>)
     let mut diametro_cintura: Vec<DatosConFecha> = vec![];
     for dato in health_data
     {
-        if let Some(peso_s) = dato.peso
+        let timestamp;
+        match dato.timestamp
         {
-            peso.push(DatosConFecha{
-                timestamp: dato.timestamp.unwrap(),
-                datos: peso_s,
-            }
+            Some(time) => timestamp = time,
+            None => continue,
+        }
+        if let Some(datos) = dato.peso{
+            peso.push(
+                DatosConFecha{
+                    timestamp,
+                    datos,
+                }
             );
         }
-        if let Some(grasa_visceral_s) = dato.grasa_visceral
-        {
-            grasa_visceral.push(DatosConFecha{
-                timestamp: dato.timestamp.unwrap(),
-                datos: grasa_visceral_s,
-            }
-            );
+        if let Some(datos) = dato.grasa_visceral{
+            grasa_visceral.push(
+                DatosConFecha{
+                    timestamp,
+                    datos
+                }
+                );
         }
-        if let Some(grasa_corporal_s) = dato.grasa_corporal
-        {
-            grasa_corporal.push(DatosConFecha{
-                timestamp: dato.timestamp.unwrap(),
-                datos: grasa_corporal_s,
-            }
-            );
+
+        if let Some(datos) = dato.grasa_corporal{
+            grasa_corporal.push(
+                DatosConFecha{
+                    timestamp,
+                    datos
+                }
+                );
         }
-        if let Some(musculo_s) = dato.musculo
-        {
-            musculo.push(DatosConFecha{
-                timestamp: dato.timestamp.unwrap(),
-                datos: musculo_s,
-            }
-            );
+
+        if let Some(datos) = dato.musculo{
+            musculo.push(
+                DatosConFecha{
+                    timestamp,
+                    datos
+                }
+                );
         }
-        if let Some(agua_s) = dato.agua
-        {
-            agua.push(DatosConFecha{
-                timestamp: dato.timestamp.unwrap(),
-                datos: agua_s,
-            }
-            );
+
+        if let Some(datos) = dato.agua{
+            agua.push(
+                DatosConFecha{
+                    timestamp,
+                    datos
+                }
+                );
         }
-        if let Some(proteina_s) = dato.proteina
-        {
-            proteina.push(DatosConFecha{
-                timestamp: dato.timestamp.unwrap(),
-                datos: proteina_s,
-            }
-            );
+
+        if let Some(datos) = dato.proteina{
+            proteina.push(
+                DatosConFecha{
+                    timestamp,
+                    datos
+                }
+                );
         }
-        if let Some(metabolismo_basal_s) = dato.metabolismo_basal
-        {
-            metabolismo_basal.push(DatosConFecha{
-                timestamp: dato.timestamp.unwrap(),
-                datos: metabolismo_basal_s,
-            }
-            );
+
+        if let Some(datos) = dato.metabolismo_basal{
+            metabolismo_basal.push(
+                DatosConFecha{
+                    timestamp,
+                    datos
+                }
+                );
         }
-        if let Some(masa_osea_s) = dato.masa_osea
-        {
-            masa_osea.push(DatosConFecha{
-                timestamp: dato.timestamp.unwrap(),
-                datos: masa_osea_s,
-            }
-            );
+
+        if let Some(datos) = dato.masa_osea{
+            masa_osea.push(
+                DatosConFecha{
+                    timestamp,
+                    datos
+                }
+                );
         }
-        if let Some(diametro_cintura_s) = dato.diametro_cintura
-        {
-            diametro_cintura.push(DatosConFecha{
-                timestamp: dato.timestamp.unwrap(),
-                datos: diametro_cintura_s,
-            }
-            );
+
+        if let Some(datos) = dato.diametro_cintura{
+            diametro_cintura.push(
+                DatosConFecha{
+                    timestamp,
+                    datos
+                }
+                );
         }
+
     }
     basic_graph_builder(peso).save("graphs/peso.png").unwrap();
     basic_graph_builder(grasa_visceral).save("graphs/grasa_visceral.png").unwrap();

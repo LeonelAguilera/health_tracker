@@ -19,12 +19,3 @@
     <input type="number" id="diametro_cintura" name="diametro_cintura" step="0.01" required><br>
     <input type="submit" value="Submit">
 </form>
-
-<script>
-function refreshGraphs() {
-    const metrics = ["weight", "grasa_visceral", "grasa_corporal", "musculo", "agua", "proteina", "metabolismo", "masa_osea", "diametro_cintura"];
-    metrics.forEach(metric => {
-        document.getElementById(metric + '-graph').src = '/graphs/' + metric + '.png?rand=' + Math.random();
-    });
-}
-</script>

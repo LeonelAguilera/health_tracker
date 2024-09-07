@@ -64,15 +64,21 @@ async fn echo(req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<By
             save_health_data(req).await
         }
 
+        (&Method::GET, "/") => {
+            simple_file_send("html/index.html").await
+        }
+
         (&Method::GET, "/scale_data") => {
             read_health_data(req).await
         }
 
         (&Method::GET, "/new_data_form") => {
-            simple_file_send("templates/new_data_form.html").await
+            simple_file_send("html/templates/new_data_form.html").await
         }
 
         (&Method::GET, path) if path.starts_with("/graphs/") => simple_file_send(remove_first(path).expect("No pude eliminar el primer caracter")).await,
+        (&Method::GET, path) if path.starts_with("/styles/") => simple_file_send(remove_first(path).expect("No pude eliminar el primer caracter")).await,
+
         // Return 404 Not Found for other routes.
         _ => {
             Ok(not_found())
@@ -123,9 +129,9 @@ async fn read_health_data(_req: Request<hyper::body::Incoming>) -> Result<Respon
     }
     make_graphs(health_data);
 
-    //let content = read_to_string("index.html").await.unwrap_or_else(|_| "File not found".to_string());
+    //let content = read_to_string("html/index.html").await.unwrap_or_else(|_| "File not found".to_string());
     
-    simple_file_send("index_t.html").await
+    simple_file_send("html/health_data.html").await
 }
 
 async fn simple_file_send(filename: &str) ->Result<Response<BoxBody<Bytes, std::io::Error>>, hyper::Error> {

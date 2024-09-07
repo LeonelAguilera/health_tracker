@@ -60,8 +60,8 @@ fn get_data_from_key(data: &String, key: &str) -> Option<f64>
     }
 }
 
-pub struct DatosConFecha
+pub struct DatoConFecha
 {
     pub timestamp: i64,
-    pub datos: f64,
+    pub dato: f64,
 }

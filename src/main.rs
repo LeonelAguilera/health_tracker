@@ -20,7 +20,7 @@ use tokio_util::io::ReaderStream;
 
 use futures_util::TryStreamExt;
 
-use data::{Datos, DatosConFecha};
+use data::{Datos, DatoConFecha};
 use chrono;
 
 use graph_builder::basic_graph_builder;
@@ -116,7 +116,7 @@ async fn read_health_data(_req: Request<hyper::body::Incoming>) -> Result<Respon
     for result in rdr.deserialize() {
         let datos: Datos = result.unwrap();
 
-        //if datos.is_recent()
+        if datos.is_recent()
         {
             health_data.push(datos);
         }
@@ -161,15 +161,15 @@ async fn simple_file_send(filename: &str) ->Result<Response<BoxBody<Bytes, std::
 
 fn make_graphs(health_data: Vec<Datos>)
 {
-    let mut peso: Vec<DatosConFecha> = vec![];
-    let mut grasa_visceral: Vec<DatosConFecha> = vec![];
-    let mut grasa_corporal: Vec<DatosConFecha> = vec![];
-    let mut musculo: Vec<DatosConFecha> = vec![];
-    let mut agua: Vec<DatosConFecha> = vec![];
-    let mut proteina: Vec<DatosConFecha> = vec![];
-    let mut metabolismo_basal: Vec<DatosConFecha> = vec![];
-    let mut masa_osea: Vec<DatosConFecha> = vec![];
-    let mut diametro_cintura: Vec<DatosConFecha> = vec![];
+    let mut peso: Vec<DatoConFecha> = vec![];
+    let mut grasa_visceral: Vec<DatoConFecha> = vec![];
+    let mut grasa_corporal: Vec<DatoConFecha> = vec![];
+    let mut musculo: Vec<DatoConFecha> = vec![];
+    let mut agua: Vec<DatoConFecha> = vec![];
+    let mut proteina: Vec<DatoConFecha> = vec![];
+    let mut metabolismo_basal: Vec<DatoConFecha> = vec![];
+    let mut masa_osea: Vec<DatoConFecha> = vec![];
+    let mut diametro_cintura: Vec<DatoConFecha> = vec![];
     for dato in health_data
     {
         let timestamp;
@@ -178,82 +178,82 @@ fn make_graphs(health_data: Vec<Datos>)
             Some(time) => timestamp = time,
             None => continue,
         }
-        if let Some(datos) = dato.peso{
+        if let Some(dato) = dato.peso{
             peso.push(
-                DatosConFecha{
+                DatoConFecha{
                     timestamp,
-                    datos,
+                    dato,
                 }
             );
         }
-        if let Some(datos) = dato.grasa_visceral{
+        if let Some(dato) = dato.grasa_visceral{
             grasa_visceral.push(
-                DatosConFecha{
+                DatoConFecha{
                     timestamp,
-                    datos
+                    dato
                 }
                 );
         }
 
-        if let Some(datos) = dato.grasa_corporal{
+        if let Some(dato) = dato.grasa_corporal{
             grasa_corporal.push(
-                DatosConFecha{
+                DatoConFecha{
                     timestamp,
-                    datos
+                    dato
                 }
                 );
         }
 
-        if let Some(datos) = dato.musculo{
+        if let Some(dato) = dato.musculo{
             musculo.push(
-                DatosConFecha{
+                DatoConFecha{
                     timestamp,
-                    datos
+                    dato
                 }
                 );
         }
 
-        if let Some(datos) = dato.agua{
+        if let Some(dato) = dato.agua{
             agua.push(
-                DatosConFecha{
+                DatoConFecha{
                     timestamp,
-                    datos
+                    dato
                 }
                 );
         }
 
-        if let Some(datos) = dato.proteina{
+        if let Some(dato) = dato.proteina{
             proteina.push(
-                DatosConFecha{
+                DatoConFecha{
                     timestamp,
-                    datos
+                    dato
                 }
                 );
         }
 
-        if let Some(datos) = dato.metabolismo_basal{
+        if let Some(dato) = dato.metabolismo_basal{
             metabolismo_basal.push(
-                DatosConFecha{
+                DatoConFecha{
                     timestamp,
-                    datos
+                    dato
                 }
                 );
         }
 
-        if let Some(datos) = dato.masa_osea{
+        if let Some(dato) = dato.masa_osea{
             masa_osea.push(
-                DatosConFecha{
+                DatoConFecha{
                     timestamp,
-                    datos
+                    dato
                 }
                 );
         }
 
-        if let Some(datos) = dato.diametro_cintura{
+        if let Some(dato) = dato.diametro_cintura{
             diametro_cintura.push(
-                DatosConFecha{
+                DatoConFecha{
                     timestamp,
-                    datos
+                    dato
                 }
                 );
         }

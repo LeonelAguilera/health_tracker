@@ -1,6 +1,6 @@
 use chrono::{DateTime, Datelike, Local, TimeZone};
 use image::{self, Pixel, RgbImage};
-use crate::data::DatosConFecha;
+use crate::data::DatoConFecha;
 
 const DEBUG_COLOR: &[u8; 3] = &[255, 0, 255];
 const LIGHT_LINE_COLOR: &[u8; 3] = &[170, 170, 170];
@@ -16,7 +16,7 @@ struct Datapoint
 }
 
 impl Datapoint {
-    fn build(data: DatosConFecha, x_start: i64, x_end: i64, y_start: f64, y_end: f64) -> Self
+    fn build(data: DatoConFecha, x_start: i64, x_end: i64, y_start: f64, y_end: f64) -> Self
     {
         let outputval = Datapoint{
             x: (1080*(data.timestamp - x_start)/(x_end - x_start)) as i64,
@@ -27,7 +27,7 @@ impl Datapoint {
                 }
                 else
                 {
-                    (1080.0 - 1080.0*(data.datos - y_start)/(y_end - y_start)) as i64
+                    (1080.0 - 1080.0*(data.dato - y_start)/(y_end - y_start)) as i64
                 }
             },
         };
@@ -35,8 +35,7 @@ impl Datapoint {
     }
 }
 
-pub fn basic_graph_builder(data: Vec<DatosConFecha>) -> RgbImage{
-    //println!("{:#?}", data);
+pub fn basic_graph_builder(data: Vec<DatoConFecha>) -> RgbImage{
     let end_date = DateTime::from_timestamp(data.last().unwrap().timestamp, 0).unwrap();
     let end_timestamp = Local.with_ymd_and_hms(end_date.year(), end_date.month(), end_date.day(), 23, 59, 59).unwrap().timestamp();
     let start_date = DateTime::from_timestamp(data[0].timestamp, 0).unwrap();
@@ -46,7 +45,7 @@ pub fn basic_graph_builder(data: Vec<DatosConFecha>) -> RgbImage{
 
     let data: Vec<Datapoint> = data.into_iter().map(|dato| Datapoint::build(dato, start_timestamp, end_timestamp, min_val - delta*0.05, max_val + delta*0.05)).collect();
 
-    let mut graph = basic_graph_canvas(1080, 1080);
+    let mut graph = basic_graph_canvas(1080, 1080, 32);
     graph = draw_horizontal_lines(graph, min_val, delta*1.1);
     graph = draw_linear_interpolation(graph, &data, 3);
     graph = draw_points(graph, &data, 5);
@@ -129,7 +128,7 @@ fn draw_points(mut canvas: RgbImage, data: &Vec<Datapoint>, point_radius: i64) -
     return canvas;
 }
 
-fn get_min_max(data: &Vec<DatosConFecha>) -> (f64, f64)
+fn get_min_max(data: &Vec<DatoConFecha>) -> (f64, f64)
 {
     let mut min_val = f64::MAX;
     let mut max_val = f64::MIN;
@@ -137,13 +136,13 @@ fn get_min_max(data: &Vec<DatosConFecha>) -> (f64, f64)
     let mut max_timestamp = i64::MIN;
     for value in data
     {
-        if value.datos < min_val
+        if value.dato < min_val
         {
-            min_val = value.datos;
+            min_val = value.dato;
         }
-        if value.datos > max_val
+        if value.dato > max_val
         {
-            max_val = value.datos;
+            max_val = value.dato;
         }
         if value.timestamp < min_timestamp
         {
@@ -157,12 +156,12 @@ fn get_min_max(data: &Vec<DatosConFecha>) -> (f64, f64)
     return (min_val, max_val);
 }
 
-fn basic_graph_canvas(width: u32, height: u32) -> RgbImage{
+fn basic_graph_canvas(width: u32, height: u32, frame_width: u32) -> RgbImage{
     let mut image_vec: Vec<u8> = vec![255; (width*height*3).try_into().unwrap()];
     let segment_separation = width/7;
 
-    for y in 0..height{
-        for x in 0..width{
+    for y in frame_width..(height - frame_width){
+        for x in 0..(width - frame_width){
             let primary_line_center = x%segment_separation;
 
             if primary_line_center < 3

@@ -2,20 +2,18 @@ mod data;
 mod graph_builder;
 
 use std::fs::OpenOptions;
-use std::io::Read;
 use std::net::SocketAddr;
 use std::str;
 
-use http_body_util::{BodyExt, Empty, Full, StreamBody};
+use http_body_util::{BodyExt, Full, StreamBody};
 use http_body_util::combinators::BoxBody;
 use hyper::{Method, Request, Response, StatusCode};
-use hyper::body::{Buf, Bytes, Frame, Body};
+use hyper::body::{Bytes, Frame};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
-//use serde::Serialize;
 use tokio::net::TcpListener;
-use tokio::fs::{File, read_to_string};
+use tokio::fs::File;
 use tokio_util::io::ReaderStream;
 
 use futures_util::TryStreamExt;
@@ -69,7 +67,7 @@ async fn echo(req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<By
         }
 
         (&Method::GET, "/scale_data") => {
-            read_health_data(req).await
+            read_health_data().await
         }
 
         (&Method::GET, "/new_data_form") => {
@@ -110,11 +108,11 @@ async fn save_health_data(req: Request<hyper::body::Incoming>) -> Result<Respons
     file.serialize(received_data).unwrap();
     file.flush().unwrap();
 
-    dummy_ok()
+    read_health_data().await
 }
 
 
-async fn read_health_data(_req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<Bytes, std::io::Error>>, hyper::Error> {
+async fn read_health_data() -> Result<Response<BoxBody<Bytes, std::io::Error>>, hyper::Error> {
     let mut rdr = csv::Reader::from_path("health_data.csv").expect("Archivo no encontrado");
 
     let mut health_data: Vec<Datos> = vec![];
@@ -131,7 +129,7 @@ async fn read_health_data(_req: Request<hyper::body::Incoming>) -> Result<Respon
 
     //let content = read_to_string("html/index.html").await.unwrap_or_else(|_| "File not found".to_string());
     
-    simple_file_send("html/health_data.html").await
+    simple_file_send("html/templates/health_data.html").await
 }
 
 async fn simple_file_send(filename: &str) ->Result<Response<BoxBody<Bytes, std::io::Error>>, hyper::Error> {
@@ -290,14 +288,14 @@ fn make_graphs(health_data: Vec<Datos>)
 //        .boxed()
 //}
 
-fn dummy_ok() -> Result<Response<BoxBody<Bytes, std::io::Error>>, hyper::Error> {
-    Ok(
-        Response::builder()
-        .status(StatusCode::OK)
-        .body(Full::new(String::from("").into()).map_err(|e| match e {}).boxed())
-        .unwrap()
-      )
-}
+//fn dummy_ok() -> Result<Response<BoxBody<Bytes, std::io::Error>>, hyper::Error> {
+//    Ok(
+//        Response::builder()
+//        .status(StatusCode::OK)
+//        .body(Full::new(String::from("").into()).map_err(|e| match e {}).boxed())
+//        .unwrap()
+//      )
+//}
 
 fn not_found() ->Response<BoxBody<Bytes, std::io::Error>> {
     Response::builder()

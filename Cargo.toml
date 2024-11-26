@@ -16,3 +16,4 @@ image = "0.25.2"
 tokio-util = "0.7.11"
 futures-util = "0.3.30"
 serde = {version = "1.0.209", features = ["derive"]}
+rusqlite = "0.32.1"

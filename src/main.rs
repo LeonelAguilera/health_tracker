@@ -1,6 +1,8 @@
 mod data;
 mod graph_builder;
+mod scale_data;
 
+use core::panic;
 use std::fs::OpenOptions;
 use std::net::SocketAddr;
 use std::str;
@@ -12,6 +14,7 @@ use hyper::body::{Bytes, Frame};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
+use rusqlite::params;
 use tokio::net::TcpListener;
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
@@ -25,26 +28,17 @@ use graph_builder::basic_graph_builder;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-
-    // We create a TcpListener and bind it to 127.0.0.1:3000
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
     let listener = TcpListener::bind(addr).await?;
 
-    // We start a loop to continuously accept incoming connections
     loop {
         let (stream, _) = listener.accept().await?;
-
-        // Use an adapter to access something implementing `tokio::io` traits as if they implement
-        // `hyper::rt` IO traits.
         let io = TokioIo::new(stream);
 
-        // Spawn a tokio task to serve multiple connections concurrently
         tokio::task::spawn(
             async move
             {
-                // Finally, we bind the incoming connection to our `hello` service
                 if let Err(err) = http1::Builder::new()
-                    // `service_fn` converts our function in a `Service`
                     .serve_connection(io, service_fn(echo))
                         .await
                         {
@@ -89,26 +83,34 @@ async fn save_health_data(req: Request<hyper::body::Incoming>) -> Result<Respons
         .collect()
         .await?
         .to_bytes();
-    let mut received_data: Datos = Datos::deserialize(
+    let received_data: Datos = Datos::deserialize(
         std::string::String::from_utf8(
             received_data.to_vec()
             ).expect("Datos recibidos corruptos\n") + "&");
-    received_data.timestamp = Some(chrono::offset::Local::now().timestamp());
+    let timestamp = chrono::offset::Local::now().timestamp();
 
-    let file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .append(true)
-        .open("health_data.csv")
-        .unwrap();
-    let mut file = csv::WriterBuilder::new()
-        .has_headers(false)
-        .from_writer(file);
-
-    file.serialize(received_data).unwrap();
-    file.flush().unwrap();
-
-    read_health_data().await
+    match scale_data::get_scale_database().
+        execute("INSERT INTO scale_data VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+    params![timestamp,
+    received_data.peso,
+    received_data.grasa_visceral,
+    received_data.grasa_corporal,
+    received_data.musculo,
+    received_data.agua,
+    received_data.proteina,
+    received_data.metabolismo_basal,
+    received_data.masa_osea,
+    received_data.diametro_cintura
+    ]){
+            Ok(num) => {
+                println!("{num} rows were updated");
+                read_health_data().await
+            },
+            Err(err) => {
+                println!("Could not add the new data to the database.\nError code: {err}");
+                Ok(not_found())
+            },
+        }
 }
 
 
@@ -157,11 +159,6 @@ async fn simple_file_send(filename: &str) ->Result<Response<BoxBody<Bytes, std::
 
     Ok(response)
 }
-
-//async fn serve_image(path: &str) -> Result<Response<BoxBody<Bytes, std::io::Error>>, hyper::Error>
-//{
-//
-//}
 
 fn make_graphs(health_data: Vec<Datos>)
 {

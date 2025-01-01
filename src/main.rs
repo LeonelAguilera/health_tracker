@@ -2,8 +2,6 @@ mod data;
 mod graph_builder;
 mod scale_data;
 
-use core::panic;
-use std::fs::OpenOptions;
 use std::net::SocketAddr;
 use std::str;
 

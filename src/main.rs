@@ -1,4 +1,4 @@
-use std::{io::{BufRead, BufReader, Write}, net::{TcpListener, TcpStream}};
+use std::{fs, io::{BufRead, BufReader, Write}, net::{TcpListener, TcpStream}};
 
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
@@ -21,7 +21,11 @@ fn connection_handler(mut stream: TcpStream){
         .collect();
     println!("Request: {http_request:#?}");
 
-    let response = ("HTTP/1.1 200 OK\r\n\r\n").as_bytes();
+    let status_ine = "HTTP/1.1 200 OK";
+    let contents = fs::read_to_string("html/index.html").unwrap();
+    let len = contents.len();
 
-    stream.write_all(response).unwrap();
+    let response = format!("{status_ine}\r\nContent-Length: {len}\r\n\r\n{contents}");
+
+    stream.write_all(response.as_bytes()).unwrap();
 }

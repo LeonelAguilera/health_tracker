@@ -1,6 +1,6 @@
 mod http;
 
-use std::{io::{BufRead, BufReader}, net::{TcpListener, TcpStream}};
+use std::net::{TcpListener, TcpStream};
 
 use http::{not_found, read_request, simple_file_response, Request};
 

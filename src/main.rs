@@ -21,8 +21,12 @@ fn connection_handler(mut stream: TcpStream){
         .collect();
     println!("Request: {http_request:#?}");
 
+    simple_file_response(stream, "html/index.html");
+}
+
+fn simple_file_response(mut stream: TcpStream, path: &str){
     let status_ine = "HTTP/1.1 200 OK";
-    let contents = fs::read_to_string("html/index.html").unwrap();
+    let contents = fs::read_to_string(path).unwrap();
     let len = contents.len();
 
     let response = format!("{status_ine}\r\nContent-Length: {len}\r\n\r\n{contents}");

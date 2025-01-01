@@ -1,4 +1,8 @@
-use std::{fs, io::{BufRead, BufReader, Write}, net::{TcpListener, TcpStream}};
+mod http;
+
+use std::{io::{BufRead, BufReader}, net::{TcpListener, TcpStream}};
+
+use http::{not_found, read_request, simple_file_response, Request};
 
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
@@ -11,25 +15,10 @@ fn main() {
     }
 }
 
-fn connection_handler(mut stream: TcpStream){
-    let buf_reader = BufReader::new(&stream);
-
-    let http_request: Vec<String> = buf_reader
-        .lines()
-        .map(|result| result.unwrap())
-        .take_while(|line| !line.is_empty())
-        .collect();
-    println!("Request: {http_request:#?}");
-
-    simple_file_response(stream, "html/index.html");
-}
-
-fn simple_file_response(mut stream: TcpStream, path: &str){
-    let status_ine = "HTTP/1.1 200 OK";
-    let contents = fs::read_to_string(path).unwrap();
-    let len = contents.len();
-
-    let response = format!("{status_ine}\r\nContent-Length: {len}\r\n\r\n{contents}");
-
-    stream.write_all(response.as_bytes()).unwrap();
+fn connection_handler(stream: TcpStream){
+    let request = read_request(&stream);
+    match request {
+        (Request::GET, path) if path == "/" => simple_file_response(stream, "html/index.html"),
+        _ => not_found(stream),
+    }
 }

@@ -2,7 +2,7 @@ mod http;
 
 use std::net::{TcpListener, TcpStream};
 
-use http::{not_found, read_request, simple_file_response, Request};
+use http::{not_found, read_request, simple_file_response, RequestType};
 
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
@@ -18,7 +18,10 @@ fn main() {
 fn connection_handler(stream: TcpStream){
     let request = read_request(&stream);
     match request {
-        (Request::GET, path) if path == "/" => simple_file_response(stream, "html/index.html"),
-        _ => not_found(stream),
+        (RequestType::GET, path) if path == "/" => simple_file_response(stream, "html/index.html"),
+        (RequestType::GET, path) if path.starts_with("/styles/") => simple_file_response(stream, &path[1..]),
+        (_, path) => {
+            println!("{path}");
+            not_found(stream)},
     }
 }

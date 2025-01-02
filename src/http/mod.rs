@@ -1,6 +1,6 @@
 use std::{fs, io::{BufRead, BufReader, Write}, net::TcpStream, str::FromStr};
 
-pub enum Request{
+pub enum RequestType{
     OPTIONS,
     GET,
     POST,
@@ -12,7 +12,7 @@ pub enum Request{
     PATCH,
 }
 
-impl FromStr for Request{
+impl FromStr for RequestType{
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -30,13 +30,13 @@ impl FromStr for Request{
     }
 }
 
-pub fn read_request(stream: &TcpStream) -> (Request, String){
+pub fn read_request(stream: &TcpStream) -> (RequestType, String){
     let buf_reader = BufReader::new(stream);
     let request_line = buf_reader.lines().next().unwrap().unwrap();
 
     let parts: Vec<&str> = request_line.split(" ").collect();
 
-    let request = Request::from_str(parts[0]);
+    let request = RequestType::from_str(parts[0]);
     let query   = parts[1].to_string();
 
     return (request.unwrap(), query);

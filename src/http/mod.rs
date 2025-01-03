@@ -1,45 +1,55 @@
-use std::{fs, io::{BufRead, BufReader, Write}, net::TcpStream, str::FromStr};
+use std::{fmt::Display, fs, io::{BufRead, BufReader, Write}, net::TcpStream};
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub enum RequestType{
-    OPTIONS,
-    GET,
-    POST,
-    PUT,
-    DELETE,
-    HEAD,
-    TRACE,
-    CONNECT,
-    PATCH,
+#[derive(Debug)]
+pub struct HttpPacket{
+    pub query: String,
+    pub _version: String,
+    pub everythingelse: String,
 }
 
-impl FromStr for RequestType{
-    type Err = ();
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "OPTIONS" => Ok(Self::OPTIONS),
-            "GET" => Ok(Self::GET),
-            "POST" => Ok(Self::POST),
-            "PUT" => Ok(Self::PUT),
-            "DELETE" => Ok(Self::DELETE),
-            "HEAD" => Ok(Self::HEAD),
-            "TRACE" => Ok(Self::TRACE),
-            "CONNECT" => Ok(Self::CONNECT),
-            "PATCH" => Ok(Self::PATCH),
+#[derive(Debug)]
+pub enum RequestType{
+    OPTIONS(HttpPacket),
+    GET(HttpPacket),
+    POST(HttpPacket),
+    PUT(HttpPacket),
+    DELETE(HttpPacket),
+    HEAD(HttpPacket),
+    TRACE(HttpPacket),
+    CONNECT(HttpPacket),
+    PATCH(HttpPacket),
+}
+impl RequestType{
+    pub fn new(stream: &TcpStream) -> Result<Self, ()> {
+        let buf_reader = BufReader::new(stream);
+        let mut s = buf_reader.lines();
+        let request_line = s.next().unwrap().unwrap();
+        let parts: Vec<&str> = request_line.split(" ").collect();
+        if parts.len() != 3{
+            return Err(());
+        }
+
+        let s: Vec<String> = s.map(|result| result.unwrap()).take_while(|line| !line.is_empty()).collect();
+
+        let inner = HttpPacket{
+            query: parts[1].to_string(),
+            _version: parts[2].to_string(),
+            everythingelse: s.join("\n"),
+        };
+        match parts[0] {
+            "OPTIONS" => Ok(Self::OPTIONS(inner)),
+            "GET" => Ok(Self::GET(inner)),
+            "POST" => Ok(Self::POST(inner)),
+            "PUT" => Ok(Self::PUT(inner)),
+            "DELETE" => Ok(Self::DELETE(inner)),
+            "HEAD" => Ok(Self::HEAD(inner)),
+            "TRACE" => Ok(Self::TRACE(inner)),
+            "CONNECT" => Ok(Self::CONNECT(inner)),
+            "PATCH" => Ok(Self::PATCH(inner)),
             _ => Err(()),
         }
     }
-}
-
-pub fn read_request(stream: &TcpStream) -> (RequestType, String){
-    let buf_reader = BufReader::new(stream);
-    let request_line = buf_reader.lines().next().unwrap().unwrap();
-
-    let parts: Vec<&str> = request_line.split(" ").collect();
-
-    let request = RequestType::from_str(parts[0]);
-    let query   = parts[1].to_string();
-
-    return (request.unwrap(), query);
 }
 
 pub fn simple_file_response(stream: TcpStream, path: &str){
@@ -57,3 +67,4 @@ pub fn file_response(mut stream: TcpStream, status_line: &str, path: &str){
     let response = format!("{status_line}\r\nContent-Length: {len}\r\n\r\n{contents}");
     let _ = stream.write_all(response.as_bytes());
 }
+

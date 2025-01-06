@@ -1,11 +1,11 @@
-use std::{fmt::Display, fs, io::{BufRead, BufReader, Write}, net::TcpStream};
+use std::{fmt::Display, fs, io::{BufRead, BufReader, Read, Write}, net::TcpStream};
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
 pub struct HttpPacket{
     pub query: String,
     pub _version: String,
-    pub everythingelse: String,
+    pub payload: Option<String>,
 }
 
 #[derive(Debug)]
@@ -22,20 +22,55 @@ pub enum RequestType{
 }
 impl RequestType{
     pub fn new(stream: &TcpStream) -> Result<Self, ()> {
-        let buf_reader = BufReader::new(stream);
-        let mut s = buf_reader.lines();
-        let request_line = s.next().unwrap().unwrap();
+        let mut buf_reader = BufReader::new(stream);
+        let mut buf = String::new();
+
+        while buf.len() < 4{
+            let mut caracter = [0; 1];
+            let _ = buf_reader.read_exact(&mut caracter);
+            buf.push(caracter[0] as char);
+        }
+
+        while buf[buf.len()-4..] != *"\r\n\r\n"{
+            let mut caracter = [0; 1];
+            let _ = buf_reader.read_exact(&mut caracter);
+            buf.push(caracter[0] as char);
+        }
+
+        let mut header = buf.lines();
+        let request_line = header.next().unwrap();
+
         let parts: Vec<&str> = request_line.split(" ").collect();
         if parts.len() != 3{
             return Err(());
         }
-
-        let s: Vec<String> = s.map(|result| result.unwrap()).take_while(|line| !line.is_empty()).collect();
+        let payload_size = header
+            .find(|line| line.starts_with("Content-Length: "))
+            .and_then(|linea| {
+                match linea.split(": ").nth(1) {
+                    Some(longitud) => Some(String::from(longitud)),
+                    None => None,
+                }
+            })
+            .and_then(|longitud| longitud.trim().parse::<usize>().ok())
+            .unwrap_or(0);
 
         let inner = HttpPacket{
             query: parts[1].to_string(),
             _version: parts[2].to_string(),
-            everythingelse: s.join("\n"),
+            //raw: s.join("\n"),
+            payload: {
+                if payload_size > 0{
+                    let mut buf = vec![0; payload_size];
+                    let _ = buf_reader.read_exact(&mut buf);
+                    let payload_str = String::from_utf8(buf).unwrap();
+
+                    Some(payload_str)
+                }
+                else{
+                    None
+                }
+            },
         };
         match parts[0] {
             "OPTIONS" => Ok(Self::OPTIONS(inner)),
@@ -49,6 +84,12 @@ impl RequestType{
             "PATCH" => Ok(Self::PATCH(inner)),
             _ => Err(()),
         }
+        /*
+        let mut s = buf_reader.lines();
+        let s: Vec<String> = s.map(|result| result.unwrap()).take_while(|line| !line.is_empty()).collect();
+
+        //Content-Length: 122
+        */
     }
 }
 

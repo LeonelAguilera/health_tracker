@@ -1,1 +1,1 @@
-mod scale;
+pub mod scale;

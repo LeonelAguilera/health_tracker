@@ -1,8 +1,9 @@
 mod http;
 mod data_tracker;
 
-use std::{io::{BufReader, Read}, net::{TcpListener, TcpStream}};
+use std::{io::{BufReader, Read}, net::{TcpListener, TcpStream}, str::FromStr};
 
+use data_tracker::scale::ScaleParameters;
 use http::{not_found, simple_file_response, RequestType::{self, GET, POST}};
 
 fn main() {
@@ -26,20 +27,18 @@ fn connection_handler(stream: TcpStream){
             "/new_data_form" => simple_file_response(stream, "html/templates/new_data_form.html"),
             path if path.starts_with("/styles/") => simple_file_response(stream, &path[1..]),
             _ => {
-                //println!("{} {}", contents.query, contents._version);
-                //println!("{}\n\n", contents.everythingelse);
                 not_found(stream)
             },
         },
         POST(contents) => match  contents.query.as_str() {
+            "/update" => {let body = ScaleParameters::from_str(&contents.payload.unwrap());
+                println!("{body:#?}");
+            }
             _ => {
-                //println!("{} {}", contents.query, contents._version);
-                //println!("{}\n\n", contents.everythingelse);
                 not_found(stream)
             },
         },
         _ => {
-            //println!("{request:#?}");
             not_found(stream)},
     }
     println!("Served\n\n");

@@ -1,17 +1,38 @@
 use std::str::FromStr;
 
+use rusqlite::Connection;
+
 #[derive(Debug)]
 pub struct ScaleParameters{
-    weight: f64,
-    imc: f64,
-    body_fat: f64,
-    visceral_fat: f64,
-    muscle: f64,
-    water: f64,
-    protein: f64,
-    metabolism: f64,
-    bone_mass: f64,
-    hip_diameter: f64,
+    pub weight: f64,
+    pub imc: f64,
+    pub body_fat: f64,
+    pub visceral_fat: f64,
+    pub muscle: f64,
+    pub water: f64,
+    pub protein: f64,
+    pub metabolism: f64,
+    pub bone_mass: f64,
+    pub hip_diameter: f64,
+}
+
+impl ScaleParameters {
+    pub fn save_to_db(&self, db: &Connection){
+        if let Err(err) = db.execute("INSERT INTO scale_data VALUES (CURRENT_TIMESTAMP, :weight, :imc, :body_fat, :visceral_fat, :muscle, :water, :protein, :metabolism, :bone_mass, :hip_diameter);", &[
+                           (":weight", self.weight.to_string().as_str()),
+                           (":imc", self.imc.to_string().as_str()),
+                           (":body_fat", self.body_fat.to_string().as_str()),
+                           (":visceral_fat", self.visceral_fat.to_string().as_str()),
+                           (":muscle", self.muscle.to_string().as_str()),
+                           (":water", self.water.to_string().as_str()),
+                           (":protein", self.protein.to_string().as_str()),
+                           (":metabolism", self.metabolism.to_string().as_str()),
+                           (":bone_mass", self.bone_mass.to_string().as_str()),
+                           (":hip_diameter", self.hip_diameter.to_string().as_str()),
+        ]){
+            println!("Database update failed: {err}");
+        }
+    }
 }
 
 impl FromStr for ScaleParameters {

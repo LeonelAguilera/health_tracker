@@ -109,3 +109,6 @@ pub fn file_response(mut stream: TcpStream, status_line: &str, path: &str){
     let _ = stream.write_all(response.as_bytes());
 }
 
+pub fn empty_ok(mut stream: TcpStream){
+    let _ = stream.write_all("HTTP/1.1 200 OK".as_bytes());
+}

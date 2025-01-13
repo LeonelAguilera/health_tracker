@@ -1,5 +1,7 @@
-use std::{fs, io::{BufRead, BufReader, Read, Write}, net::TcpStream};
+use std::{fs, io::{BufReader, Read, Write}, net::TcpStream};
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///
+pub const OK: &str = "HTTP/1.1 200 OK";
 
 #[derive(Debug)]
 pub struct HttpPacket{
@@ -9,6 +11,7 @@ pub struct HttpPacket{
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 pub enum RequestType{
     OPTIONS(HttpPacket),
     GET(HttpPacket),
@@ -84,31 +87,27 @@ impl RequestType{
             "PATCH" => Ok(Self::PATCH(inner)),
             _ => Err(()),
         }
-        /*
-        let mut s = buf_reader.lines();
-        let s: Vec<String> = s.map(|result| result.unwrap()).take_while(|line| !line.is_empty()).collect();
-
-        //Content-Length: 122
-        */
     }
 }
 
 pub fn simple_file_response(stream: TcpStream, path: &str){
-    file_response(stream, "HTTP/1.1 200 OK", path);
+    file_response(stream, OK, path);
 }
 
 pub fn not_found(stream: TcpStream){
     file_response(stream, "HTTP/1.1 404 NOT FOUND", "html/404.html");
 }
 
-pub fn file_response(mut stream: TcpStream, status_line: &str, path: &str){
-    let contents = fs::read_to_string(path).unwrap();
-    let len = contents.len();
+pub fn file_response(stream: TcpStream, status_line: &str, path: &str){
+    byte_stream_response(stream, status_line, fs::read_to_string(path).unwrap().into_bytes());
+}
 
-    let response = format!("{status_line}\r\nContent-Length: {len}\r\n\r\n{contents}");
-    let _ = stream.write_all(response.as_bytes());
+pub fn byte_stream_response(mut stream: TcpStream, status_line: &str, mut byte_stream: Vec<u8>){
+    let mut response = format!("{status_line}\r\nContent-Length: {}\r\n\r\n", byte_stream.len()).into_bytes();
+    response.append(&mut byte_stream);
+    let _ = stream.write_all(&response);
 }
 
 pub fn empty_ok(mut stream: TcpStream){
-    let _ = stream.write_all("HTTP/1.1 200 OK".as_bytes());
+    let _ = stream.write_all(OK.as_bytes());
 }

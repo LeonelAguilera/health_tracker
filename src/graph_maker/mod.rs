@@ -1,45 +1,60 @@
+mod image_wrapper;
+
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use chrono::{Datelike, TimeZone};
 use rusqlite::{Connection, Error};
+use image_wrapper::Imagen;
 
 const ALLOWED_COLUMN_NAMES: &[&str] = &["weight", "imc", "body_fat", "visceral_fat", "muscle", "water", "protein", "metabolism", "bone_mass", "hip_diameter"];
 const ALLOWED_TABLES_NAMES: &[&str] = &["scale_data"];
 
-pub fn graph_maker(db: &Connection, key: &str, table_name: &str) -> Result<Vec<(String, f64)>, String>{
-    if !ALLOWED_COLUMN_NAMES.contains(&key){
+
+pub fn graph_maker(db: &Connection, column_name: &str, table_name: &str, res_x: usize, res_y: usize) -> Result<Vec<u8>, String>{
+    let data = read_data_from_db(db, column_name, table_name).unwrap();
+
+    println!("{data:#?}");
+
+    let graph = Imagen::new_empty_graph(res_x, res_y);
+    
+    return Ok(graph.into_bytes());
+}
+
+fn read_data_from_db(db: &Connection, column_name: &str, table_name: &str) -> Result<Vec<(usize, f64)>, String>{
+    if !ALLOWED_COLUMN_NAMES.contains(&column_name){
         return Err("Columna no válida".to_string());
     }
     if !ALLOWED_TABLES_NAMES.contains(&table_name){
         return Err("Tabla no válida".to_string());
     }
 
+    let current_time = chrono::offset::Local::now();
+    let eod_timestamp = chrono::offset::Local.with_ymd_and_hms(current_time.year(), current_time.month(), current_time.day(), 23, 59, 59).unwrap().timestamp();
+    let cutoff_timestamp = eod_timestamp - ((image_wrapper::GRAPH_NUM_DAYS * 24 * 3600) as i64);
+
     let query = format!("SELECT timev, {}
                         FROM {}
-                        WHERE timev >= DATETIME('now', '-7 days')
+                        WHERE timev >= {}
                         UNION
                         SELECT timev, {}
                         FROM(
-                        SELECT timev, {}
-                        FROM {}
-                        WHERE timev < DATETIME('now', '-7 days')
-                        ORDER BY timev DESC
-                        LIMIT 1);", key, table_name, key, key, table_name);
+                            SELECT timev, {}
+                            FROM {}
+                            WHERE timev <  {}
+                            ORDER BY timev DESC
+                            LIMIT 1
+                        );", column_name, table_name, cutoff_timestamp, column_name, column_name, table_name, cutoff_timestamp);
     let mut statement = db.prepare(&query).unwrap();
 
-    let data = statement.query_map([], |row|{
-        let date = row.get::<usize, String>(0);
+    return Ok(statement.query_map([], |row|{
+        let date = row.get::<usize, usize>(0);
         let value = row.get::<usize, f64>(1);
 
         match (date, value) {
             (Ok(date), Ok(value)) => Ok((date, value)),
             _ => Err(Error::InvalidQuery),
         }
-    });
-
-    let mut graph = Vec::new();
-    let data = data.unwrap();
-
-    for dato in data{
-        graph.push(dato.unwrap());
-    }
-
-    return Ok(graph);
+    }).unwrap()
+    .filter_map(|x| x.ok())
+    .collect::<Vec<(usize, f64)>>());
 }

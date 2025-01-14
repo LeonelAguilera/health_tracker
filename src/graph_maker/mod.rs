@@ -1,7 +1,5 @@
 mod image_wrapper;
 
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use chrono::{Datelike, TimeZone};
 use rusqlite::{Connection, Error};
 use image_wrapper::Imagen;
@@ -13,14 +11,13 @@ const ALLOWED_TABLES_NAMES: &[&str] = &["scale_data"];
 pub fn graph_maker(db: &Connection, column_name: &str, table_name: &str, res_x: usize, res_y: usize) -> Result<Vec<u8>, String>{
     let data = read_data_from_db(db, column_name, table_name).unwrap();
 
-    println!("{data:#?}");
-
-    let graph = Imagen::new_empty_graph(res_x, res_y);
+    let mut graph = Imagen::new_empty_graph(res_x, res_y);
+    graph.draw_line(data);
     
     return Ok(graph.into_bytes());
 }
 
-fn read_data_from_db(db: &Connection, column_name: &str, table_name: &str) -> Result<Vec<(usize, f64)>, String>{
+fn read_data_from_db(db: &Connection, column_name: &str, table_name: &str) -> Result<Vec<(i64, f64)>, String>{
     if !ALLOWED_COLUMN_NAMES.contains(&column_name){
         return Err("Columna no válida".to_string());
     }
@@ -47,7 +44,7 @@ fn read_data_from_db(db: &Connection, column_name: &str, table_name: &str) -> Re
     let mut statement = db.prepare(&query).unwrap();
 
     return Ok(statement.query_map([], |row|{
-        let date = row.get::<usize, usize>(0);
+        let date = row.get::<usize, i64>(0);
         let value = row.get::<usize, f64>(1);
 
         match (date, value) {
@@ -56,5 +53,5 @@ fn read_data_from_db(db: &Connection, column_name: &str, table_name: &str) -> Re
         }
     }).unwrap()
     .filter_map(|x| x.ok())
-    .collect::<Vec<(usize, f64)>>());
+    .collect::<Vec<(i64, f64)>>());
 }

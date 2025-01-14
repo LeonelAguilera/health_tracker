@@ -66,7 +66,7 @@ fn open_database() -> Connection {
         println!("Database table creation failed: {err}");
     }
 
-    //insert_dummy_data(&con);
+    insert_dummy_data(&con);
 
     return con;
 }

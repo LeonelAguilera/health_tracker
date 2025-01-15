@@ -12,7 +12,8 @@ pub fn graph_maker(db: &Connection, column_name: &str, table_name: &str, res_x: 
     let data = read_data_from_db(db, column_name, table_name).unwrap();
 
     let mut graph = Imagen::new_empty_graph(res_x, res_y);
-    graph.draw_line(data);
+    graph.draw_horizontal_lines(&data);
+    graph.draw_line(&data);
     
     return Ok(graph.into_bytes());
 }

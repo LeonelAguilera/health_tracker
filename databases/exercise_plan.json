@@ -1,5 +1,5 @@
 {
-    "Monday": [
+    "Mon": [
         {"Single": {
 			"Name": "Hip Thrust",
 			"Reps": 3
@@ -13,7 +13,7 @@
 			"Reps": 3
 		}}
     ],
-    "Tuesday": [
+    "Tue": [
         {"Single": {
 			"Name": "Barbell_Row",
 			"Reps": 3
@@ -29,9 +29,9 @@
         {"Single": {
 			"Name": "Rear_Delt_Fly",
 			"Reps": 3
-		}},
+		}}
     ],
-    "Wednesday": [
+    "Wed": [
         {"Single": {
 			"Name": "Cable_Crunch",
 			"Reps": 3
@@ -49,13 +49,13 @@
 			"Reps": 3
         }}
     ],
-    "Thursday": [
+    "Thu": [
         {"Single": {
 			"Name": "Rest",
 			"Reps": 1
 		}}
     ],
-    "Friday":[
+    "Fri":[
         {"Single": {
 			"Name": "Hip_Thrust",
 			"Reps": 3
@@ -73,7 +73,7 @@
 			"Reps": 3
         }}
     ],
-    "Saturday": [
+    "Sat": [
         {"Switch": [
             {
 				"Name": "Hammer_Curl",
@@ -97,7 +97,7 @@
 			"Reps": 3
 		}}
     ],
-    "Sunday": [
+    "Sun": [
         {"Single": {
 			"Name": "Rest",
 			"Reps": 1

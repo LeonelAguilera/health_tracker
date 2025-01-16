@@ -28,6 +28,7 @@ fn connection_handler(stream: TcpStream, db: &Connection){
         GET(contents) => match  contents.query.as_str() {
             "/" => simple_file_response(stream, "html/index.html"),
             "/scale_data" => simple_file_response(stream, "html/templates/health_data.html"),
+            "/train_data" => {data_tracker::exercise::get_todays_list(); not_found(stream)},
             "/new_data_form" => simple_file_response(stream, "html/templates/new_data_form.html"),
             path if path.starts_with("/styles/") => simple_file_response(stream, &path[1..]),
             path if path.starts_with("/graph/")  => byte_stream_response(stream, OK, graph_maker(db, &path[7..], "scale_data", 1080, 1080)),
@@ -63,7 +64,16 @@ fn open_database() -> Connection {
             bone_mass DECIMAL(4,2) NOT NULL,
             hip_diameter DECIMAL(4,2) NOT NULL
             );", ()){
-        println!("Database table creation failed: {err}");
+        println!("Database scale_data table creation failed: {err}");
+    }
+    if let Err(err) = con.execute("CREATE TABLE IF NOT EXISTS exercise_data(
+            timev INTEGER UNSIGNED PRIMARY KEY,
+            exercise_name VARCHAR(50),
+            wset TINYINT UNSIGNED,
+            duration SMALLINT UNSIGNED,
+            repetitions TINYINT UNSIGNED
+            );", ()){
+        println!("Database exercise_data table creation failed: {err}");
     }
 
     //insert_dummy_data(&con);
@@ -90,7 +100,24 @@ fn insert_dummy_data(con:  &Connection){
                                       (":i", (70.8 + (i as f64)).to_string().as_str()),
                                       (":j", (70.9 + (i as f64)).to_string().as_str()),
         ]){
-            println!("Dummy data insertion failed in {i}: {err}");
+            println!("Dummy data insertion in scale_data failed in {i}: {err}");
+        }
+    }
+
+    let example_exercises = vec!["Bicep_Curl", "Hammer_Curl", "Concentration_Curl"];
+    for i in 0..28{
+        for exercise_name in &example_exercises{
+            for rep in 1..4{
+                if let Err(err) = con.execute("INSERT INTO exercise_data VALUES (:tim, :a, :b, :c, :d);", &[
+                                              (":tim", (current_timestamp - (i * half_day_diff) + (rep * (exercise_name.len() as u64))).to_string().as_str()),
+                                              (":a", exercise_name),
+                                              (":b", (rep).to_string().as_str()),
+                                              (":c", (60+2*i).to_string().as_str()),
+                                              (":d", (8+((i+rep)%6)).to_string().as_str()),
+                ]){
+                    println!("Dummy data insertion in scale_data failed in {i}, {exercise_name}@{rep}: {err}");
+                }
+            }
         }
     }
 }

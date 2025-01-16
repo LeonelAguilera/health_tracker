@@ -1,0 +1,106 @@
+{
+    "Monday": [
+        {"Single": {
+			"Name": "Hip Thrust",
+			"Reps": 3
+		}},
+        {"Single": {
+			"Name": "Squat",
+			"Reps": 3
+		}},
+        {"Single": {
+			"Name": "Standing_Calves",
+			"Reps": 3
+		}}
+    ],
+    "Tuesday": [
+        {"Single": {
+			"Name": "Barbell_Row",
+			"Reps": 3
+		}},
+        {"Single": {
+			"Name": "Barbell_Overhead",
+			"Reps": 3
+		}},
+        {"Single": {
+			"Name": "lateral_Raise",
+			"Reps": 3
+		}},
+        {"Single": {
+			"Name": "Rear_Delt_Fly",
+			"Reps": 3
+		}},
+    ],
+    "Wednesday": [
+        {"Single": {
+			"Name": "Cable_Crunch",
+			"Reps": 3
+        }},
+        {"Single": {
+			"Name": "Leg_Raise",
+			"Reps": 3
+        }},
+        {"Single": {
+			"Name": "Bench_Press",
+			"Reps": 3
+		}},
+        {"Single": {
+			"Name": "Decline_Pushup",
+			"Reps": 3
+        }}
+    ],
+    "Thursday": [
+        {"Single": {
+			"Name": "Rest",
+			"Reps": 1
+		}}
+    ],
+    "Friday":[
+        {"Single": {
+			"Name": "Hip_Thrust",
+			"Reps": 3
+        }},
+        {"Single": {
+			"Name": "Lunges",
+			"Reps": 3
+        }},
+        {"Single": {
+			"Name": "Romanian_Deadlift",
+			"Reps": 3
+        }},
+        {"Single": {
+			"Name": "Nordic_Hamstring_Curl",
+			"Reps": 3
+        }}
+    ],
+    "Saturday": [
+        {"Switch": [
+            {
+				"Name": "Hammer_Curl",
+				"Reps": 2
+			},
+            {
+				"Name": "Bicep_Curl",
+				"Reps": 2
+			},
+            {
+				"Name": "Concentration_Curl",
+				"Reps": 2
+			}
+        ]},
+        {"Single": {
+			"Name": "Cable_Pushdown",
+			"Reps": 3
+		}},
+        {"Single": {
+			"Name": "Skull_Crusher",
+			"Reps": 3
+		}}
+    ],
+    "Sunday": [
+        {"Single": {
+			"Name": "Rest",
+			"Reps": 1
+		}}
+    ]
+}

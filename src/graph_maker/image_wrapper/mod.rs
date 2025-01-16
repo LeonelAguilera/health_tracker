@@ -98,14 +98,6 @@ impl Imagen {
         
         //Dibujar círculos
         for datapoint in data{
-            /*
-            if datapoint.0 < CIRCLE_OUTER_RADIUS as f64 || datapoint.0 > (self.width - CIRCLE_OUTER_RADIUS) as f64{
-                continue;
-            }
-            if datapoint.1 < CIRCLE_OUTER_RADIUS as f64 || datapoint.1 > (self.height - CIRCLE_OUTER_RADIUS) as f64{
-                continue;
-            }*/
-
             let x_min = (datapoint.0 as usize).checked_sub(CIRCLE_OUTER_RADIUS).unwrap_or(0);
             let x_max = (datapoint.0 as usize + CIRCLE_OUTER_RADIUS).min(self.width);
             let y_min = (datapoint.1 as usize).checked_sub(CIRCLE_OUTER_RADIUS).unwrap_or(0);

@@ -13,6 +13,8 @@ const BASE_GRAPH_LINE_COLOR: Rgb<u8> = Rgb([32, 64, 200]);
 pub const GRAPH_NUM_DAYS: usize = 7;
 const MAIN_LINE_THICKNESS: usize = 5;
 const GRAPH_LINE_THICKNESS: usize = 7;
+const CIRCLE_OUTER_RADIUS: usize = 9;
+const CIRCLE_INNER_RADIUS: usize = 6;
 
 pub struct Imagen{
     buffer: Vec<Rgb<u8>>,
@@ -50,20 +52,30 @@ impl Imagen {
     }
 
     pub fn draw_line(&mut self, data: &Vec<(i64, f64)>){
+        println!("{data:#?}");
         let current_time = chrono::offset::Local::now();
         let eod_timestamp = chrono::offset::Local.with_ymd_and_hms(current_time.year(), current_time.month(), current_time.day(), 23, 59, 59).unwrap().timestamp();
         let t0 = eod_timestamp - ((GRAPH_NUM_DAYS * 24 * 3600) as i64);
 
-        let time_scale_factor = (eod_timestamp - t0)/(self.width as i64);
-        let data: Vec<(i64, f64)> = data.iter().map(|datapoint| (((datapoint.0 - t0)/time_scale_factor, datapoint.1))).collect();
         let ymin = data.iter().map(|datapoint| datapoint.1).reduce(f64::min).unwrap().floor();
         let ymax = data.iter().map(|datapoint| datapoint.1).reduce(f64::max).unwrap().ceil();
+
+        let time_scale_factor = (eod_timestamp - t0)/(self.width as i64);
         let y_scale_factor = (ymax - ymin)/(self.height as f64);
 
+        let data: Vec<(f64, f64)> = data.iter()
+            .map(|datapoint| (
+                    ((datapoint.0 - t0)/time_scale_factor) as f64,
+                    ((ymax - datapoint.1)/y_scale_factor) as f64
+                    )
+                )
+            .collect();
+        
+        //Dibujar líneas
         for i in 1..(data.len() - 1){
-            let x0 = data[i].0 as f64;
+            let x0 = data[i].0;
             let y0 = data[i].1;
-            let x1 = data[i + 1].0 as f64;
+            let x1 = data[i + 1].0;
             let y1 = data[i + 1].1;
 
             let m = (y1 - y0)/(x1 - x0);
@@ -72,37 +84,65 @@ impl Imagen {
             let x0 = x0.max(0.0) as usize;
             let x1 = x1.max(0.0) as usize;
 
-
             for x in x0..x1{
-                let y = ((((x as f64)*m + n) - ymin)/y_scale_factor) as usize;
+                let y = ((x as f64)*m + n) as usize;
                 let y_delta = ((GRAPH_LINE_THICKNESS as f64)/(2.0 * f64::cos(f64::atan(m)))) as usize;
 
-                for y in (y.checked_sub(y_delta).unwrap_or(0))..(y.checked_add(y_delta).unwrap_or(self.height)){
+                for y in (y.checked_sub(y_delta).unwrap_or(0))..y.min(self.height){
                     let index = (y * self.width) + x;
+                    println!("{y}");
                     self.buffer[index] = BASE_GRAPH_LINE_COLOR;
                 }
             }
         }
+        
+        //Dibujar círculos
+        for datapoint in data{
+            /*
+            if datapoint.0 < CIRCLE_OUTER_RADIUS as f64 || datapoint.0 > (self.width - CIRCLE_OUTER_RADIUS) as f64{
+                continue;
+            }
+            if datapoint.1 < CIRCLE_OUTER_RADIUS as f64 || datapoint.1 > (self.height - CIRCLE_OUTER_RADIUS) as f64{
+                continue;
+            }*/
 
+            let x_min = (datapoint.0 as usize).checked_sub(CIRCLE_OUTER_RADIUS).unwrap_or(0);
+            let x_max = (datapoint.0 as usize + CIRCLE_OUTER_RADIUS).min(self.width);
+            let y_min = (datapoint.1 as usize).checked_sub(CIRCLE_OUTER_RADIUS).unwrap_or(0);
+            let y_max = (datapoint.1 as usize + CIRCLE_OUTER_RADIUS).min(self.height);
+
+            for y in y_min..y_max{
+                for x in x_min..x_max{
+                    let x2 = ((x as f64) - datapoint.0).powi(2) as usize;
+                    let y2 = ((y as f64) - datapoint.1).powi(2) as usize;
+
+                    if x2 + y2 <= CIRCLE_INNER_RADIUS.pow(2){
+                        let index = (y * self.width) + x;
+                        self.buffer[index] = BACKGROUND_COLOR;
+                    }
+                    else if x2 + y2 <= CIRCLE_OUTER_RADIUS.pow(2){
+                        let index = (y * self.width) + x;
+                        self.buffer[index] = BASE_GRAPH_LINE_COLOR;
+                    }
+                }
+            }
+        }
     }
 
     pub fn draw_horizontal_lines(&mut self, data: &Vec<(i64, f64)>){
         let ymin = data.iter().map(|datapoint| datapoint.1).reduce(f64::min).unwrap().floor();
         let ymax = data.iter().map(|datapoint| datapoint.1).reduce(f64::max).unwrap().ceil();
         let mut delta = (ymax - ymin).ceil();
-        println!("{ymin}\t{ymax}\t{delta}");
 
         if delta < 2.0{
             delta += 10.0;
         }
         let denominador = 10.0f64.powf(delta.log10().floor() - 1.0);
         let delta = delta.div_euclid(denominador) as usize;
-        println!("{denominador:?}\t{delta:?}");
 
         for i in 0..delta{
             let y = i*self.height/delta;
 
-            println!("{y:#?}");
             for x in 0..self.height{
                 let index = (y * self.width) + x;
                 self.buffer[index] = LIGHT_AXIS_COLOR;

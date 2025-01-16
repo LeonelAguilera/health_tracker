@@ -10,6 +10,9 @@ const ALLOWED_TABLES_NAMES: &[&str] = &["scale_data"];
 
 pub fn graph_maker(db: &Connection, column_name: &str, table_name: &str, res_x: usize, res_y: usize) -> Result<Vec<u8>, String>{
     let data = read_data_from_db(db, column_name, table_name).unwrap();
+    if data.len() == 0{
+        return Err("NO DATA TO DISPLAY".to_string());
+    }
 
     let mut graph = Imagen::new_empty_graph(res_x, res_y);
     graph.draw_horizontal_lines(&data);
@@ -47,7 +50,7 @@ fn read_data_from_db(db: &Connection, column_name: &str, table_name: &str) -> Re
     return Ok(statement.query_map([], |row|{
         let date = row.get::<usize, i64>(0);
         let value = row.get::<usize, f64>(1);
-
+    
         match (date, value) {
             (Ok(date), Ok(value)) => Ok((date, value)),
             _ => Err(Error::InvalidQuery),

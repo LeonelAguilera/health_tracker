@@ -28,7 +28,7 @@ fn connection_handler(stream: TcpStream, db: &Connection){
         GET(contents) => match  contents.query.as_str() {
             "/" => simple_file_response(stream, "html/index.html"),
             "/scale_data" => simple_file_response(stream, "html/templates/health_data.html"),
-            "/train_data" => {data_tracker::exercise::get_todays_list(); not_found(stream)},
+            "/train_data" => {data_tracker::exercise::get_todays_list(db); not_found(stream)},
             "/new_data_form" => simple_file_response(stream, "html/templates/new_data_form.html"),
             path if path.starts_with("/styles/") => simple_file_response(stream, &path[1..]),
             path if path.starts_with("/graph/")  => byte_stream_response(stream, OK, graph_maker(db, &path[7..], "scale_data", 1080, 1080)),

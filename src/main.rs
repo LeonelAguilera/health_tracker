@@ -71,7 +71,8 @@ fn open_database() -> Connection {
             exercise_name VARCHAR(50),
             wset TINYINT UNSIGNED,
             duration SMALLINT UNSIGNED,
-            repetitions TINYINT UNSIGNED
+            repetitions TINYINT UNSIGNED,
+            weight SMALLINT UNSIGNED
             );", ()){
         println!("Database exercise_data table creation failed: {err}");
     }
@@ -108,12 +109,13 @@ fn insert_dummy_data(con:  &Connection){
     for i in 0..28{
         for exercise_name in &example_exercises{
             for rep in 1..4{
-                if let Err(err) = con.execute("INSERT INTO exercise_data VALUES (:tim, :a, :b, :c, :d);", &[
+                if let Err(err) = con.execute("INSERT INTO exercise_data VALUES (:tim, :a, :b, :c, :d, :e);", &[
                                               (":tim", (current_timestamp - (i * half_day_diff) + (rep * (exercise_name.len() as u64))).to_string().as_str()),
                                               (":a", exercise_name),
                                               (":b", (rep).to_string().as_str()),
                                               (":c", (60+2*i).to_string().as_str()),
                                               (":d", (8+((i+rep)%6)).to_string().as_str()),
+                                              (":e", 10.to_string().as_str()),
                 ]){
                     println!("Dummy data insertion in scale_data failed in {i}, {exercise_name}@{rep}: {err}");
                 }

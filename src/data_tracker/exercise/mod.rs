@@ -10,6 +10,7 @@ const EXERCISE_PLAN_PATH: &str = "databases/exercise_plan.json";
 struct Ejercicio{
     name: String,
     n_reps: Vec<u8>,
+    weight: Vec<u16>,
 }
 
 impl Ejercicio {
@@ -26,11 +27,12 @@ impl Ejercicio {
             f => return Err(format!("Malformed JSON:\n\tOn exercise creation\n\tExpected Number on exercise name\n\tInstead got: {f:#?}").to_string()),
         };
 
-        let n_reps = (1..(reps as u8 + 1)).map(|serie| read_data_from_db(db, &name, serie)).collect::<Vec<u8>>();
+        let (n_reps, weight): (Vec<_>, Vec<_>) = (1..(reps as u8 + 1)).map(|serie| read_data_from_db(db, &name, serie)).unzip();
 
         Ok(Ejercicio{
             name,
             n_reps,
+            weight,
         })
     }
 }
@@ -90,9 +92,9 @@ fn json_to_list(db: &Connection, input_json: JsonValue) -> Result<Vec<Ejercicio>
         }).collect::<Result<Vec<Vec<Ejercicio>>,String>>()?.into_iter().flatten().collect::<Vec<Ejercicio>>());
 }
 
-fn read_data_from_db(db: &Connection, exercise_name: &String, serie: u8) -> u8{
+fn read_data_from_db(db: &Connection, exercise_name: &String, serie: u8) -> (u8, u16){
     let exercise_name = format!("'{exercise_name}'");
-    let query = format!("SELECT repetitions
+    let query = format!("SELECT repetitions, weight
                          FROM exercise_data
                          WHERE(
                              exercise_name = {exercise_name}
@@ -102,6 +104,5 @@ fn read_data_from_db(db: &Connection, exercise_name: &String, serie: u8) -> u8{
                          ORDER BY timev DESC
                          LIMIT 1;
                          ");
-    println!("YIPPIEEE");
-    return db.query_row(&query, [], |row| row.get::<usize, u8>(0)).unwrap();
+    return db.query_row(&query, [], |row| Ok((row.get::<usize, u8>(0).unwrap_or(0), row.get::<usize, u16>(1).unwrap_or(0)))).unwrap_or((0, 0));
 }

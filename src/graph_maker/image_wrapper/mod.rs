@@ -52,7 +52,6 @@ impl Imagen {
     }
 
     pub fn draw_line(&mut self, data: &Vec<(i64, f64)>){
-        println!("{data:#?}");
         let current_time = chrono::offset::Local::now();
         let eod_timestamp = chrono::offset::Local.with_ymd_and_hms(current_time.year(), current_time.month(), current_time.day(), 23, 59, 59).unwrap().timestamp();
         let t0 = eod_timestamp - ((GRAPH_NUM_DAYS * 24 * 3600) as i64);
@@ -90,7 +89,6 @@ impl Imagen {
 
                 for y in (y.checked_sub(y_delta).unwrap_or(0))..y.min(self.height){
                     let index = (y * self.width) + x;
-                    println!("{y}");
                     self.buffer[index] = BASE_GRAPH_LINE_COLOR;
                 }
             }

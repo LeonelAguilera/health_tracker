@@ -7,7 +7,7 @@ use rusqlite::Connection;
 const EXERCISE_PLAN_PATH: &str = "databases/exercise_plan.json";
 
 #[derive(Debug)]
-struct Ejercicio{
+pub struct Ejercicio{
     name: String,
     n_reps: Vec<u8>,
     weight: Vec<u16>,
@@ -37,12 +37,31 @@ impl Ejercicio {
     }
 }
 
-pub fn get_todays_list(db: &Connection){
+pub fn build_graph_htmx_from_exercise_plan(plan: Vec<Ejercicio>) -> String{
+ let mut htmx = String::from(r##"
+                             <button hx-target="#form-container" hx-get="/new_training">Start training</button>
+                             <div id="graphs">
+                             "##);
+ for ejercicio in plan{
+     let nombre_ejercicio = ejercicio.name;
+     let representacion_grafico = format!(r##"
+                                          <div class="graph-container">
+                                          <h3>{nombre_ejercicio}</h3>
+                                          <img src="graph/{nombre_ejercicio}" alt="{nombre_ejercicio} graph" id="{nombre_ejercicio}-graph">
+                                          </div>
+                                          "##);
+     htmx.push_str(representacion_grafico.as_str());
+ }
+
+ htmx.push_str("</div>");
+ return htmx;
+}
+
+pub fn get_todays_list(db: &Connection) -> Result<Vec<Ejercicio>, String>{
     let exercise_plan = fs::read_to_string(EXERCISE_PLAN_PATH).unwrap();
     let exercise_plan = json::parse(&exercise_plan).unwrap();
     let exercise_plan = json_to_list(db, exercise_plan);
-
-    println!("{exercise_plan:#?}");
+    return exercise_plan;
 }
 
 fn json_to_list(db: &Connection, input_json: JsonValue) -> Result<Vec<Ejercicio>, String>{

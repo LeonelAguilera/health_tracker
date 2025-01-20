@@ -29,7 +29,7 @@ fn connection_handler(stream: TcpStream, db: &Connection){
             "/" => simple_file_response(stream, "html/index.html"),
             "/scale_data" => simple_file_response(stream, "html/templates/health_data.html"),
             "/train_data" => {
-                let plan = data_tracker::exercise::get_todays_list(db).unwrap();
+                let plan = data_tracker::exercise::get_todays_list().unwrap();
                 byte_stream_response(stream, OK, Ok(build_graph_htmx_from_exercise_plan(plan).as_bytes().to_vec()))
             },
             "/new_data_form" => simple_file_response(stream, "html/templates/new_data_form.html"),

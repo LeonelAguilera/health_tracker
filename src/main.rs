@@ -4,7 +4,7 @@ mod http;
 mod data_tracker;
 mod graph_maker;
 use data_tracker::{exercise::{build_graph_htmx_from_exercise_plan, PlanEjercicio}, scale::ScaleParameters};
-use graph_maker::{graph_handler, scale_graph_maker};
+use graph_maker::graph_handler;
 use http::{byte_stream_response, empty_ok, not_found, simple_file_response, RequestType::{self, GET, POST}, OK};
 
 //Standard library
@@ -39,7 +39,7 @@ fn connection_handler(stream: TcpStream, db: &Connection, exercise_plan: &PlanEj
             },
             "/new_data_form" => simple_file_response(stream, "html/templates/new_data_form.html"),
             query if query.starts_with("/styles/") => simple_file_response(stream, &query[1..]),
-            query if query.starts_with("/graph/")  => byte_stream_response(stream, OK, graph_handler(db, query)),
+            query if query.starts_with("/graph/")  => {println!("Serving graph"); byte_stream_response(stream, OK, graph_handler(db, query))},
             _ => {
                 not_found(stream)
             },

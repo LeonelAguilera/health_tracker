@@ -20,10 +20,14 @@ pub struct Imagen{
     buffer: Vec<Rgb<u8>>,
     width: usize,
     height: usize,
+    x_min: i64,
+    x_max: i64,
+    y_min: f64,
+    y_max: f64,
 }
 
 impl Imagen {
-    pub fn new_empty_graph(res_x: usize, res_y: usize, timescale: usize) -> Self{
+    pub fn new_empty_graph(res_x: usize, res_y: usize, timescale: usize, y_min: f64, y_max: f64) -> Self{
         //let mut graph: Vec<Rgb<u8>> = Vec::with_capacity(res_x*res_y);
         let mut graph = vec![BACKGROUND_COLOR; res_x*res_y];
 
@@ -44,28 +48,33 @@ impl Imagen {
             }
         }
 
+        let current_time = chrono::offset::Local::now();
+        let eod_timestamp = chrono::offset::Local.with_ymd_and_hms(current_time.year(), current_time.month(), current_time.day(), 23, 59, 59).unwrap().timestamp();
+        let t0 = eod_timestamp - ((timescale * 24 * 3600) as i64);
+
         return Self{
             buffer: graph,
             width: res_x,
             height: res_y,
+            x_min: t0,
+            x_max: eod_timestamp,
+            y_min,
+            y_max,
         };
     }
 
     pub fn draw_line(&mut self, data: &Vec<(i64, f64)>){
-        let current_time = chrono::offset::Local::now();
-        let eod_timestamp = chrono::offset::Local.with_ymd_and_hms(current_time.year(), current_time.month(), current_time.day(), 23, 59, 59).unwrap().timestamp();
-        let t0 = eod_timestamp - ((GRAPH_NUM_DAYS * 24 * 3600) as i64);
 
-        let ymin = data.iter().map(|datapoint| datapoint.1).reduce(f64::min).unwrap().floor();
-        let ymax = data.iter().map(|datapoint| datapoint.1).reduce(f64::max).unwrap().ceil();
+        //let ymin = data.iter().map(|datapoint| datapoint.1).reduce(f64::min).unwrap().floor();
+        //let ymax = data.iter().map(|datapoint| datapoint.1).reduce(f64::max).unwrap().ceil();
 
-        let time_scale_factor = (eod_timestamp - t0)/(self.width as i64);
-        let y_scale_factor = (ymax - ymin)/(self.height as f64);
+        let time_scale_factor = (self.x_max - self.x_min)/(self.width as i64);
+        let y_scale_factor = (self.y_max - self.y_min)/(self.height as f64);
 
         let data: Vec<(f64, f64)> = data.iter()
             .map(|datapoint| (
-                    ((datapoint.0 - t0)/time_scale_factor) as f64,
-                    ((ymax - datapoint.1)/y_scale_factor) as f64
+                    ((datapoint.0 - self.x_min)/time_scale_factor) as f64,
+                    ((self.y_max - datapoint.1)/y_scale_factor) as f64
                     )
                 )
             .collect();

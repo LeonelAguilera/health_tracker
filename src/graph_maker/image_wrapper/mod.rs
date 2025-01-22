@@ -23,13 +23,13 @@ pub struct Imagen{
 }
 
 impl Imagen {
-    pub fn new_empty_graph(res_x: usize, res_y: usize) -> Self{
+    pub fn new_empty_graph(res_x: usize, res_y: usize, timescale: usize) -> Self{
         //let mut graph: Vec<Rgb<u8>> = Vec::with_capacity(res_x*res_y);
         let mut graph = vec![BACKGROUND_COLOR; res_x*res_y];
 
-        let week_delta = res_x/GRAPH_NUM_DAYS;
+        let week_delta = res_x/timescale;
 
-        for x in 0..GRAPH_NUM_DAYS{
+        for x in 0..timescale{
             for y in 0..res_y{
                 for i in 0..MAIN_LINE_THICKNESS{
                     let index = (y * res_x) + (x*week_delta) + i;

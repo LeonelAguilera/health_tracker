@@ -35,6 +35,19 @@ impl Ejercicio {
             weight,
         })
     }
+
+    fn update(&mut self, db: &Connection){
+        let (n_reps, weight): (Vec<_>, Vec<_>) = (1..(self.n_reps.len() as u8 + 1)).map(|serie| read_data_from_db(db, &self.name, serie)).unzip();
+
+        self.n_reps = n_reps;
+        self.weight = weight;
+    }
+}
+
+impl Clone for Ejercicio {
+    fn clone(&self) -> Self {
+        Self { name: self.name.clone(), n_reps: self.n_reps.clone(), weight: self.weight.clone()}
+    }
 }
 
 enum ColeccionEjercicios {
@@ -42,10 +55,19 @@ enum ColeccionEjercicios {
     Switch(Vec<Ejercicio>),
 }
 
-struct PlanEjercicio([Vec<ColeccionEjercicios>; 7]);
+impl ColeccionEjercicios {
+    fn update(&mut self, db: &Connection){
+        match self {
+            Self::Single(ejercicio) => ejercicio.update(db),
+            Self::Switch(ejercicios) => ejercicios.iter_mut().for_each(|ejercicio| ejercicio.update(db)),
+        }
+    }
+}
+
+pub struct PlanEjercicio([Vec<ColeccionEjercicios>; 7]);
 
 impl PlanEjercicio {
-    fn new(db: &Connection) -> Result<Self, String>{
+    pub fn new(db: &Connection) -> Result<Self, String>{
         let exercise_plan = fs::read_to_string(EXERCISE_PLAN_PATH).unwrap();
         let exercise_plan = json::parse(&exercise_plan).or(Err("Malformed JSON".to_string()))?;
 
@@ -54,94 +76,59 @@ impl PlanEjercicio {
             f => return Err(format!("Malformed JSON\n\tOn first read\n\tExpected parent object to be Object\n\tInstead got: {f:#?}").to_string()),
         };
 
-        let plan: Result<[Vec<ColeccionEjercicios>;7], _> = semanario.iter().map(|dia| {
+        semanario.iter().map(|dia| {
             match dia {
                 (_, JsonValue::Array(entradas)) => entradas.iter()
-                                                      .map(|entrada|{
-                                                          if let JsonValue::Object(tipo_ejercicio) = entrada{
-                                                              if let Some(JsonValue::Object(ejercicio)) = tipo_ejercicio.get("Single"){
-                                                                  match Ejercicio::new(db, ejercicio) {
-                                                                      Ok(ejercicio) => Ok(ColeccionEjercicios::Single(ejercicio)),
-                                                                      Err(err) => Err(err),
-                                                                  }
-                                                              }
-                                                              else if let Some(JsonValue::Array(ejercicios)) = tipo_ejercicio.get("Switch"){
-                                                                  ejercicios.iter().map(|o_ejercicio|{
-                                                                      match o_ejercicio {
-                                                                          JsonValue::Object(ejercicio) => Ejercicio::new(db, ejercicio),
-                                                                          f => Err(format!("Malformed JSON:\n\tOn Switch\n\tExpected JsonValue::Object inside Array\n\tInstead found: {f:#?}").to_string()),
-                                                                      }
-                                                                  }).collect::<Result<Vec<Ejercicio>,String>>()
-                                                                  .map(|switch_content|ColeccionEjercicios::Switch(switch_content))
-                                                              }
-                                                              else{
-                                                                  Err(format!("Malformed JSON:\n\tOn exercise kind selection\n\tExpected either Object Single or Array Switch\n\tInstead got: {tipo_ejercicio:#?}").to_string())
-                                                              }
-                                                          }
-                                                          else{
-                                                              Err(format!("Malformed JSON:\n\tOn exercise kind reading\n\tExpected the input type to be an object\n\tInstead got: {entrada:#?}").to_string())
-                                                          }
-                                                      }).collect::<Result<Vec<ColeccionEjercicios>,String>>(),
+                    .map(|entrada|{
+                        if let JsonValue::Object(tipo_ejercicio) = entrada{
+                            if let Some(JsonValue::Object(ejercicio)) = tipo_ejercicio.get("Single"){
+                                Ejercicio::new(db, ejercicio).map(|ejercicio| ColeccionEjercicios::Single(ejercicio))
+                            }
+                            else if let Some(JsonValue::Array(ejercicios)) = tipo_ejercicio.get("Switch"){
+                                ejercicios.iter().map(|o_ejercicio|{
+                                    match o_ejercicio {
+                                        JsonValue::Object(ejercicio) => Ejercicio::new(db, ejercicio),
+                                        f => Err(format!("Malformed JSON:\n\tOn Switch\n\tExpected JsonValue::Object inside Array\n\tInstead found: {f:#?}").to_string()),
+                                    }
+                                }).collect::<Result<Vec<Ejercicio>,String>>()
+                                .map(|switch_content|ColeccionEjercicios::Switch(switch_content))
+                            }
+                            else{
+                                Err(format!("Malformed JSON:\n\tOn exercise kind selection\n\tExpected either Object Single or Array Switch\n\tInstead got: {tipo_ejercicio:#?}").to_string())
+                            }
+                        }
+                        else{
+                            Err(format!("Malformed JSON:\n\tOn exercise kind reading\n\tExpected the input type to be an object\n\tInstead got: {entrada:#?}").to_string())
+                        }
+                    }).collect::<Result<Vec<ColeccionEjercicios>,String>>(),
                 (f, _) => Err(format!("Malformed JSON\n\tOn {f} plan reading\n\tExpected Array\n\tInstead got: {f:#?}").to_string()),
             }
-        }).collect::<Result<Vec<Vec<ColeccionEjercicios>>, String>>()?.try_into().ok().ok_or("Malformed JSON:\n\tWeek len was not 7 days".to_string());
-        return plan;
+        }).collect::<Result<Vec<Vec<ColeccionEjercicios>>, String>>()?
+        .try_into()
+            .ok()
+            .ok_or("Malformed JSON:\n\tWeek len was not 7 days".to_string())
+            .map(|contents| Self(contents))
     }
-}
 
+    pub fn get_todays_list(&self) -> Vec<Ejercicio> {
+        let now = chrono::offset::Local::now();
+        let weekday = now.weekday().num_days_from_monday() as usize;
+        let current_day = now.ordinal() as usize;
 
-pub fn get_todays_list() -> Result<Vec<Ejercicio>, String>{
-    let exercise_plan = fs::read_to_string(EXERCISE_PLAN_PATH).unwrap();
-    let exercise_plan = json::parse(&exercise_plan).unwrap();
-    let exercise_plan = json_to_list(exercise_plan);
-    return exercise_plan;
-}
+        self.0[weekday].iter().map(|coleccion| match coleccion {
+            ColeccionEjercicios::Single(ejercicio) => Vec::from([ejercicio.clone()]),
+            ColeccionEjercicios::Switch(ejercicios) => {
+                let switch_len = ejercicios.len();
+                let mut ejercicios = ejercicios.clone();
+                ejercicios.rotate_right(current_day % switch_len);
+                ejercicios
+            }
+        }).flatten().collect()
+    }
 
-fn json_to_list(input_json: JsonValue) -> Result<Vec<Ejercicio>, String>{
-    let now = chrono::offset::Local::now();
-    let weekday = now.weekday().to_string();
-    let current_day = now.ordinal();
-
-    let dia = match input_json {
-        JsonValue::Object(dia) => dia,
-        f => return Err(format!("Malformed JSON\n\tOn first read\n\tExpected parent object to be Object\n\tInstead got: {f:#?}").to_string()),
-    };
-
-    let plan = dia.get(&weekday).ok_or_else(|| format!("Missing weekday plan for {weekday}").to_string())?;
-
-    let entradas = match plan {
-        JsonValue::Array(entradas) => entradas,
-        f => return Err(format!("Malformed JSON\n\tOn {weekday} plan reading\n\tExpected Array\n\tInstead got: {f:#?}").to_string()),
-    };
-
-    return Ok(entradas.iter()
-              .map(|entrada|{
-                  if let JsonValue::Object(tipo_ejercicio) = entrada{
-                      if let Some(JsonValue::Object(ejercicio)) = tipo_ejercicio.get("Single"){
-                          match Ejercicio::new(ejercicio) {
-                              Ok(ejercicio) => Ok(vec![ejercicio]),
-                              Err(err) => Err(err),
-                          }
-                      }
-                      else if let Some(JsonValue::Array(ejercicios)) = tipo_ejercicio.get("Switch"){
-                          let mut ejercicios = ejercicios.clone();
-                          let displacement = (current_day as usize) % ejercicios.len();
-                          ejercicios.rotate_right(displacement);
-                          ejercicios.iter().map(|o_ejercicio|{
-                              match o_ejercicio {
-                                  JsonValue::Object(ejercicio) => Ejercicio::new(ejercicio),
-                                  f => Err(format!("Malformed JSON:\n\tOn Switch\n\tExpected JsonValue::Object inside Array\n\tInstead found: {f:#?}").to_string()),
-                              }
-                          }).collect::<Result<Vec<Ejercicio>,String>>()
-                      }
-                      else{
-                          Err(format!("Malformed JSON:\n\tOn exercise kind selection\n\tExpected either Object Single or Array Switch\n\tInstead got: {tipo_ejercicio:#?}").to_string())
-                      }
-                  }
-                  else{
-                      Err(format!("Malformed JSON:\n\tOn exercise kind reading\n\tExpected the input type to be an object\n\tInstead got: {entrada:#?}").to_string())
-                  }
-              }).collect::<Result<Vec<Vec<Ejercicio>>,String>>()?.into_iter().flatten().collect::<Vec<Ejercicio>>());
+    pub fn update(&mut self, db: &Connection) {
+        self.0.iter_mut().for_each(|dia| dia.iter_mut().for_each(|plan| plan.update(db)));
+    }
 }
 
 pub fn build_graph_htmx_from_exercise_plan(plan: Vec<Ejercicio>) -> String{
@@ -177,54 +164,4 @@ fn read_data_from_db(db: &Connection, exercise_name: &String, serie: u8) -> (u8,
                          ");
     return db.query_row(&query, [], |row| Ok((row.get::<usize, u8>(0).unwrap_or(0), row.get::<usize, u16>(1).unwrap_or(0)))).unwrap_or((0, 0));
 }
-
-//Useless but don't want to lose it because is beautiful
-
-fn json_to_exercise_list(db: &Connection, input_json: JsonValue) -> Result<Vec<Ejercicio>, String>{
-    let now = chrono::offset::Local::now();
-    let weekday = now.weekday().to_string();
-    let current_day = now.ordinal();
-
-    let dia = match input_json {
-        JsonValue::Object(dia) => dia,
-        f => return Err(format!("Malformed JSON\n\tOn first read\n\tExpected parent object to be Object\n\tInstead got: {f:#?}").to_string()),
-    };
-
-    let plan = dia.get(&weekday).ok_or_else(|| format!("Missing weekday plan for {weekday}").to_string())?;
-
-    let entradas = match plan {
-        JsonValue::Array(entradas) => entradas,
-        f => return Err(format!("Malformed JSON\n\tOn {weekday} plan reading\n\tExpected Array\n\tInstead got: {f:#?}").to_string()),
-    };
-
-    return Ok(entradas.iter()
-              .map(|entrada|{
-                  if let JsonValue::Object(tipo_ejercicio) = entrada{
-                      if let Some(JsonValue::Object(ejercicio)) = tipo_ejercicio.get("Single"){
-                          match Ejercicio::new(db, ejercicio) {
-                              Ok(ejercicio) => Ok(vec![ejercicio]),
-                              Err(err) => Err(err),
-                          }
-                      }
-                      else if let Some(JsonValue::Array(ejercicios)) = tipo_ejercicio.get("Switch"){
-                          let mut ejercicios = ejercicios.clone();
-                          let displacement = (current_day as usize) % ejercicios.len();
-                          ejercicios.rotate_right(displacement);
-                          ejercicios.iter().map(|o_ejercicio|{
-                              match o_ejercicio {
-                                  JsonValue::Object(ejercicio) => Ejercicio::new(db, ejercicio),
-                                  f => Err(format!("Malformed JSON:\n\tOn Switch\n\tExpected JsonValue::Object inside Array\n\tInstead found: {f:#?}").to_string()),
-                              }
-                          }).collect::<Result<Vec<Ejercicio>,String>>()
-                      }
-                      else{
-                          Err(format!("Malformed JSON:\n\tOn exercise kind selection\n\tExpected either Object Single or Array Switch\n\tInstead got: {tipo_ejercicio:#?}").to_string())
-                      }
-                  }
-                  else{
-                      Err(format!("Malformed JSON:\n\tOn exercise kind reading\n\tExpected the input type to be an object\n\tInstead got: {entrada:#?}").to_string())
-                  }
-              }).collect::<Result<Vec<Vec<Ejercicio>>,String>>()?.into_iter().flatten().collect::<Vec<Ejercicio>>());
-}
-
 

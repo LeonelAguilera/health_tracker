@@ -1,4 +1,7 @@
+mod httperrors;
 use std::{fs, io::{BufReader, Read, Write}, net::TcpStream};
+
+use httperrors::HttpError;
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 pub const OK: &str = "HTTP/1.1 200 OK";
@@ -116,4 +119,9 @@ pub fn byte_stream_response(mut stream: TcpStream, status_line: &str, byte_strea
 
 pub fn empty_ok(mut stream: TcpStream){
     let _ = stream.write_all(OK.as_bytes());
+}
+
+pub fn send_error(mut stream: TcpStream, error: HttpError) {
+    let status_line = format!("HTTP/1.1 {} {}", error.error_code(), error.message());
+    let _ = stream.write_all(&status_line.into_bytes());
 }

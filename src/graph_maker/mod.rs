@@ -5,7 +5,6 @@ use rusqlite::{Connection, Error};
 use image_wrapper::Imagen;
 
 const ALLOWED_COLUMN_NAMES: &[&str] = &["weight", "imc", "body_fat", "visceral_fat", "muscle", "water", "protein", "metabolism", "bone_mass", "hip_diameter"];
-const ALLOWED_TABLES_NAMES: &[&str] = &["scale_data"];
 const ALLOWED_GRAPH_TYPES: &[&str] = &["single", "multi"];
 
 #[derive(Debug)]
@@ -33,11 +32,9 @@ impl GraphType {
         let query = "SELECT * FROM sqlite_master WHERE type='table'";
         let mut statement = db.prepare(query).unwrap();
 
-        let asdf = statement.query_map([], |row| 
-                                       Ok((row.get::<usize, String>(0), row.get::<usize, String>(1)))
-                                       ).unwrap().collect::<Vec<_>>();
+        let allowed_tables_names = statement.query_map([], |row| row.get::<usize, String>(1)).unwrap().collect::<Result<Vec<String>, _>>().expect("Unable of reading table names");
 
-        println!("The db output for de query <{query}> is: {asdf:#?}");
+        println!("The db output for de query <{query}> is: {allowed_tables_names:#?}");
         /*
         if !ALLOWED_COLUMN_NAMES.contains(&column_name){
             return Err("Columna no válida".to_string());
@@ -167,9 +164,11 @@ fn read_data_from_db(db: &Connection, column_name: &str, table_name: &str) -> Re
     if !ALLOWED_COLUMN_NAMES.contains(&column_name){
         return Err("Columna no válida".to_string());
     }
+    /*
     if !ALLOWED_TABLES_NAMES.contains(&table_name){
         return Err("Tabla no válida".to_string());
     }
+    */
 
     let current_time = chrono::offset::Local::now();
     let eod_timestamp = chrono::offset::Local.with_ymd_and_hms(current_time.year(), current_time.month(), current_time.day(), 23, 59, 59).unwrap().timestamp();

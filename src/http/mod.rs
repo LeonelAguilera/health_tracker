@@ -1,4 +1,4 @@
-mod httperrors;
+pub mod httperrors;
 use std::{fs, io::{BufReader, Read, Write}, net::TcpStream};
 
 use httperrors::HttpError;
@@ -105,16 +105,15 @@ pub fn file_response(stream: TcpStream, status_line: &str, path: &str){
     byte_stream_response(stream, status_line, Ok(fs::read_to_string(path).unwrap().into_bytes()));
 }
 
-pub fn byte_stream_response(mut stream: TcpStream, status_line: &str, byte_stream: Result<Vec<u8>, String>){
-    let mut response;
+pub fn byte_stream_response(mut stream: TcpStream, status_line: &str, byte_stream: Result<Vec<u8>, HttpError>){
     match byte_stream {
         Ok(mut byte_stream) => {
-            response = format!("{status_line}\r\nContent-Length: {}\r\n\r\n", byte_stream.len()).into_bytes();
+            let mut response = format!("{status_line}\r\nContent-Length: {}\r\n\r\n", byte_stream.len()).into_bytes();
             response.append(&mut byte_stream);
+            let _ = stream.write_all(&response);
         }
-        Err(err)=> response = format!("HTTP/1.1 422 {err}").into_bytes(),
+        Err(err)=> send_error(stream, err),
     }
-    let _ = stream.write_all(&response);
 }
 
 pub fn empty_ok(mut stream: TcpStream){

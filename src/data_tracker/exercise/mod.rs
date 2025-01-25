@@ -141,7 +141,7 @@ pub fn build_graph_htmx_from_exercise_plan(plan: Vec<Ejercicio>) -> String{
         let representacion_grafico = format!(r##"
                                              <div class="graph-container">
                                              <h3>{nombre_ejercicio}</h3>
-                                             <img src="graph/{nombre_ejercicio}" alt="{nombre_ejercicio} graph" id="{nombre_ejercicio}-graph">
+                                             <img src="graph/exercise_data/repetitions/exercise_name/{nombre_ejercicio}/multi/30/wset/1/2/3" alt="{nombre_ejercicio} graph" id="{nombre_ejercicio}-graph">
                                              </div>
                                              "##);
         htmx.push_str(representacion_grafico.as_str());

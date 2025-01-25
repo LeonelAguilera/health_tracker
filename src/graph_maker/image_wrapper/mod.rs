@@ -52,6 +52,8 @@ impl Imagen {
         let eod_timestamp = chrono::offset::Local.with_ymd_and_hms(current_time.year(), current_time.month(), current_time.day(), 23, 59, 59).unwrap().timestamp();
         let t0 = eod_timestamp - ((timescale * 24 * 3600) as i64);
 
+        println!("x_min: {t0}");
+
         return Self{
             buffer: graph,
             width: res_x,
@@ -64,10 +66,6 @@ impl Imagen {
     }
 
     pub fn draw_line(&mut self, data: &Vec<(i64, f64)>){
-
-        //let ymin = data.iter().map(|datapoint| datapoint.1).reduce(f64::min).unwrap().floor();
-        //let ymax = data.iter().map(|datapoint| datapoint.1).reduce(f64::max).unwrap().ceil();
-
         let time_scale_factor = (self.x_max - self.x_min)/(self.width as i64);
         let y_scale_factor = (self.y_max - self.y_min)/(self.height as f64);
 
@@ -80,7 +78,7 @@ impl Imagen {
             .collect();
         
         //Dibujar líneas
-        for i in 1..(data.len() - 1){
+        for i in 0..(data.len() - 1){
             let x0 = data[i].0;
             let y0 = data[i].1;
             let x1 = data[i + 1].0;
@@ -128,10 +126,8 @@ impl Imagen {
         }
     }
 
-    pub fn draw_horizontal_lines(&mut self, data: &Vec<(i64, f64)>){
-        let ymin = data.iter().map(|datapoint| datapoint.1).reduce(f64::min).unwrap().floor();
-        let ymax = data.iter().map(|datapoint| datapoint.1).reduce(f64::max).unwrap().ceil();
-        let mut delta = (ymax - ymin).ceil();
+    pub fn draw_horizontal_lines(&mut self){
+        let mut delta = (self.y_max - self.y_min).ceil();
 
         if delta < 2.0{
             delta += 10.0;

@@ -6,8 +6,7 @@ use image_wrapper::Imagen;
 
 use crate::http::httperrors::HttpError;
 
-const ALLOWED_COLUMN_NAMES: &[&str] = &["weight", "imc", "body_fat", "visceral_fat", "muscle", "water", "protein", "metabolism", "bone_mass", "hip_diameter"];
-const ALLOWED_GRAPH_TYPES: &[&str] = &["single", "multi"];
+const ALLOWED_GRAPH_TYPES: &[&str] = &["simple", "multi"];
 
 #[derive(Debug)]
 enum GraphType {
@@ -18,7 +17,7 @@ enum GraphType {
 impl GraphType {
     fn new(kind: &str, query: Vec<String>) -> Result<Self, HttpError>{
         match kind {
-            "single" => Ok(Self::Simple),
+            "simple" => Ok(Self::Simple),
             "multi" => if query.len() > 2{
                 Ok(Self::Multi((query[0].clone(), query[1..].to_vec())))
             }
@@ -44,7 +43,6 @@ impl GraphType {
                                         ORDER BY timev DESC
                                         LIMIT 1
                                     );");
-                println!("\n\nQuery:\n{query}\n\n");
                 let mut statement = db.prepare(&query).unwrap();
                 return statement.query_map(params_from_iter(parameters.iter()), |row| {
                         let date = row.get::<usize, i64>(0);
@@ -76,7 +74,6 @@ impl GraphType {
                                         ORDER BY timev DESC
                                         LIMIT 1
                                     );");
-                println!("\n\nQuery:\n{query}\n\n");
                 return selector.1.iter()
                     .map(|selector_data|{
                         let mut parameters = parameters.clone();
@@ -85,6 +82,7 @@ impl GraphType {
                         let return_val = statement.query_map(params_from_iter(parameters.iter()), |row| {
                             let date = row.get::<usize, i64>(0);
                             let value = row.get::<usize, f64>(1);
+                            println!("datos leidos:\n\t{date:#?}\n\t{value:#?}\n\n\n");
                             if let (Ok(date), Ok(value)) = (date, value){
                                 Ok((date, value))
                             }
@@ -94,50 +92,17 @@ impl GraphType {
                         })
                         .map_err(|_| HttpError::InternalServerError("Could not get the requested data"))?
                         .collect::<Result<Vec<(i64, f64)>,_>>()
-                        .map_err(|_| HttpError::InternalServerError("Could not get all the data"));
-                        return_val
+                        .map_err(|_| HttpError::InternalServerError("Could not get all the data"))?;
+                        if return_val.len() < 1{
+                            Err(HttpError::NotFound("No data to plot"))
+                        }
+                        else{
+                            Ok(return_val)
+                        }
                     }
                 ).collect::<Result<Vec<Vec<(i64, f64)>>,HttpError>>();
             }
         }
-        /*
-           if !ALLOWED_COLUMN_NAMES.contains(&column_name){
-           return Err("Columna no válida".to_string());
-           }
-           if !ALLOWED_TABLES_NAMES.contains(&table_name){
-           return Err("Tabla no válida".to_string());
-           }
-
-           let current_time = chrono::offset::Local::now();
-           let eod_timestamp = chrono::offset::Local.with_ymd_and_hms(current_time.year(), current_time.month(), current_time.day(), 23, 59, 59).unwrap().timestamp();
-           let cutoff_timestamp = eod_timestamp - ((image_wrapper::GRAPH_NUM_DAYS * 24 * 3600) as i64);
-
-           let query = format!("SELECT timev, {}
-           FROM {}
-           WHERE timev >= {}
-           UNION
-           SELECT timev, {}
-           FROM(
-           SELECT timev, {}
-           FROM {}
-           WHERE timev <  {}
-           ORDER BY timev DESC
-           LIMIT 1
-           );", column_name, table_name, cutoff_timestamp, column_name, column_name, table_name, cutoff_timestamp);
-           let mut statement = db.prepare(&query).unwrap();
-
-           return Ok(statement.query_map([], |row|{
-           let date = row.get::<usize, i64>(0);
-           let value = row.get::<usize, f64>(1);
-
-           match (date, value) {
-           (Ok(date), Ok(value)) => Ok((date, value)),
-           _ => Err(Error::InvalidQuery),
-           }
-           }).unwrap()
-           .filter_map(|x| x.ok())
-           .collect::<Vec<(i64, f64)>>());
-           */
     }
 }
 
@@ -187,7 +152,7 @@ impl GraphData {
             lhs = parts.next().ok_or(HttpError::BadRequest("No graph type selected"))?;
         }
         let graph_type = lhs;
-        let timescale = parts.next().ok_or(HttpError::BadRequest("No timescale included"))?.parse::<usize>().ok().ok_or(HttpError::BadRequest("Bad timescale format"))? * 3600 * 24;
+        let timescale = parts.next().ok_or(HttpError::BadRequest("No timescale included"))?.parse::<usize>().ok().ok_or(HttpError::BadRequest("Bad timescale format"))?;
         let gtype = GraphType::new(graph_type, parts.map(|part| part.to_string()).collect())?;
 
         return Ok(Self{
@@ -227,7 +192,7 @@ impl GraphData {
 
         let current_time = chrono::offset::Local::now();
         let eod_timestamp = chrono::offset::Local.with_ymd_and_hms(current_time.year(), current_time.month(), current_time.day(), 23, 59, 59).unwrap().timestamp();
-        let cutoff_timestamp = eod_timestamp - (self.timescale as i64);
+        let cutoff_timestamp = eod_timestamp - ((self.timescale * 24 * 3600) as i64);
 
         self.gtype.fetch_data_from_db(db, &self.source_table, &self.source_column, query_condition, parameters, cutoff_timestamp)
     }
@@ -237,66 +202,20 @@ pub fn graph_handler(db: &Connection, query: &str) -> Result<Vec<u8>, HttpError>
     println!("Handling graph with query {query}");
     let graph = GraphData::new(query)?;
     println!("Data extracted:\n{graph:#?}");
-    let data = graph.fetch_data_from_db(db);
+    let data = graph.fetch_data_from_db(db)?;
     println!("{data:#?}");
-    let image = Imagen::new_empty_graph(1080, 1080, graph.timescale, 1.0, 2.0);
-
+    let mut image = Imagen::new_empty_graph(
+        1080,
+        1080,
+        graph.timescale,
+        data.iter().flatten().map(|collection| collection.1).reduce(f64::min).unwrap_or(0.0).floor(),
+        data.iter().flatten().map(|collection| collection.1).reduce(f64::max).unwrap_or(0.0).ceil()
+    );
+    image.draw_horizontal_lines();
+    for data_collection in data{
+        image.draw_line(&data_collection);
+    }
     return Ok(image.into_bytes());
-}
-
-/*
-pub fn scale_graph_maker(db: &Connection, column_name: &str, table_name: &str, res_x: usize, res_y: usize) -> Result<Vec<u8>, String>{
-    let data = read_data_from_db(db, column_name, table_name).unwrap();
-    if data.len() == 0{
-        return Err("NO DATA TO DISPLAY".to_string());
-    }
-
-    let mut graph = Imagen::new_empty_graph(res_x, res_y, 7);
-    graph.draw_horizontal_lines(&data);
-    graph.draw_line(&data);
-    
-    return Ok(graph.into_bytes());
-}*/
-
-fn read_data_from_db(db: &Connection, column_name: &str, table_name: &str) -> Result<Vec<(i64, f64)>, String>{
-    if !ALLOWED_COLUMN_NAMES.contains(&column_name){
-        return Err("Columna no válida".to_string());
-    }
-    /*
-    if !ALLOWED_TABLES_NAMES.contains(&table_name){
-        return Err("Tabla no válida".to_string());
-    }
-    */
-
-    let current_time = chrono::offset::Local::now();
-    let eod_timestamp = chrono::offset::Local.with_ymd_and_hms(current_time.year(), current_time.month(), current_time.day(), 23, 59, 59).unwrap().timestamp();
-    let cutoff_timestamp = eod_timestamp - ((image_wrapper::GRAPH_NUM_DAYS * 24 * 3600) as i64);
-
-    let query = format!("SELECT timev, {}
-                        FROM {}
-                        WHERE timev >= {}
-                        UNION
-                        SELECT timev, {}
-                        FROM(
-                            SELECT timev, {}
-                            FROM {}
-                            WHERE timev <  {}
-                            ORDER BY timev DESC
-                            LIMIT 1
-                        );", column_name, table_name, cutoff_timestamp, column_name, column_name, table_name, cutoff_timestamp);
-    let mut statement = db.prepare(&query).unwrap();
-
-    return Ok(statement.query_map([], |row|{
-        let date = row.get::<usize, i64>(0);
-        let value = row.get::<usize, f64>(1);
-    
-        match (date, value) {
-            (Ok(date), Ok(value)) => Ok((date, value)),
-            _ => Err(Error::InvalidQuery),
-        }
-    }).unwrap()
-    .filter_map(|x| x.ok())
-    .collect::<Vec<(i64, f64)>>());
 }
 
 #[cfg(test)]
@@ -305,13 +224,13 @@ mod tests{
 
     #[test]
     fn graph_query_parser_1(){
-        let query = "/graph/scale_data/weight/single/7";
+        let query = "/graph/scale_data/weight/simple/7";
         let graph = GraphData::new(query).unwrap();
         assert_eq!(graph.source_table, "scale_data".to_string());
         assert_eq!(graph.source_column, "weight".to_string());
         assert_eq!(graph.static_db_data, Vec::new());
         assert_eq!(graph.gtype, GraphType::Simple);
-        assert_eq!(graph.timescale, 7*24*3600);
+        assert_eq!(graph.timescale, 7);
     }
     #[test]
     fn graph_query_parser_2(){
@@ -321,6 +240,6 @@ mod tests{
         assert_eq!(graph.source_column, "repetitions".to_string());
         assert_eq!(graph.static_db_data, Vec::from([("exercise_name".to_string(), "Bicep_Curl".to_string())]));
         assert_eq!(graph.gtype, GraphType::Multi(("wset".to_string(), Vec::from([1_u16.to_string(), 2_u16.to_string(), 3_u16.to_string()]))));
-        assert_eq!(graph.timescale, 30*24*3600);
+        assert_eq!(graph.timescale, 30);
     }
 }

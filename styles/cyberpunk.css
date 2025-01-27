@@ -75,7 +75,7 @@ html, body {
     margin: 0 auto;
 }
 
-h1 {
+h1, h2 {
 	color: #00ffff;
 	font-size: 3em;
 	text-shadow: 0 0 10px #00ffff;
@@ -148,4 +148,25 @@ input[type="submit"]:hover {
 	width: auto;
 	max-width: 80vw;
 	margin: auto;
+}
+.exercise-name, .current-set {
+    margin-bottom: 20px;
+}
+.exercise-gif img {
+    width: 100%;
+    height: auto;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
+    margin-bottom: 20px;
+}
+.input-section {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+.input-group {
+    display: flex;
+    flex-direction: column;
+    width: 48%;
 }

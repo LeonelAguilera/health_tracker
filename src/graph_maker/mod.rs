@@ -48,6 +48,8 @@ impl GraphType {
                         let date = row.get::<usize, i64>(0);
                         let value = row.get::<usize, f64>(1);
 
+                        println!("\t{date:#?}\t{value:#?}");
+
                         if let (Ok(date), Ok(value)) = (date, value){
                             Ok((date, value))
                         }
@@ -199,11 +201,8 @@ impl GraphData {
 }
 
 pub fn graph_handler(db: &Connection, query: &str) -> Result<Vec<u8>, HttpError>{
-    println!("Handling graph with query {query}");
     let graph = GraphData::new(query)?;
-    println!("Data extracted:\n{graph:#?}");
     let data = graph.fetch_data_from_db(db)?;
-    println!("{data:#?}");
     let mut image = Imagen::new_empty_graph(
         1080,
         1080,

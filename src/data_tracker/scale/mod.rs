@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{str::FromStr, time::{SystemTime, UNIX_EPOCH}};
 
 use rusqlite::Connection;
 
@@ -18,7 +18,10 @@ pub struct ScaleParameters{
 
 impl ScaleParameters {
     pub fn save_to_db(&self, db: &Connection){
-        if let Err(err) = db.execute("INSERT INTO scale_data VALUES (CURRENT_TIMESTAMP, :weight, :imc, :body_fat, :visceral_fat, :muscle, :water, :protein, :metabolism, :bone_mass, :hip_diameter);", &[
+        let current_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+
+        if let Err(err) = db.execute("INSERT INTO scale_data VALUES (:tim, :weight, :imc, :body_fat, :visceral_fat, :muscle, :water, :protein, :metabolism, :bone_mass, :hip_diameter);", &[
+                           (":tim", current_timestamp.to_string().as_str()),          
                            (":weight", self.weight.to_string().as_str()),
                            (":imc", self.imc.to_string().as_str()),
                            (":body_fat", self.body_fat.to_string().as_str()),

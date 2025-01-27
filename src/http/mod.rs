@@ -64,7 +64,6 @@ impl RequestType{
         let inner = HttpPacket{
             query: parts[1].to_string(),
             _version: parts[2].to_string(),
-            //raw: s.join("\n"),
             payload: {
                 if payload_size > 0{
                     let mut buf = vec![0; payload_size];

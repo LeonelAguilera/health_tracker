@@ -1,0 +1,34 @@
+<div class="exercise-name">
+    <h1>{exercise_name}</h1>
+</div>
+
+<!-- Current Set -->
+<div class="current-set">
+    <h2>{current_set}</h2>
+</div>
+
+<!-- GIF Section -->
+<div class="exercise-gif">
+    <img src="ilustration/{exercise_name}.gif" alt="Exercise GIF">
+</div>
+
+<!-- Input Section -->
+<form hx-post="/submit_exercise/{next_exercise}/{next_set}" hx-target="#form-container" class="exercise-form">
+    <input type="hidden" name="exercise_name" value="{exercise_name}">
+    <input type="hidden" name="current_set" value="{current_set}">
+    <div class="input-section">
+        <div class="input-group">
+            <label for="weight">Weight (kg):</label>
+            <input type="number" id="weight" name="weight" step="0.05" placeholder="{weight}" required>
+        </div>
+        <div class="input-group">
+            <label for="repetitions">Repetitions:</label>
+            <input type="number" id="repetitions" name="repetitions" placeholder="{reps}" required>
+        </div>
+    </div>
+
+    <!-- Submit Button -->
+    <div class="submit-section">
+        <button type="submit">Submit</button>
+    </div>
+</form>

@@ -10,7 +10,6 @@ const LIGHT_AXIS_COLOR: Rgb<u8> = Rgb([127, 127, 127]);
 const DARK_AXIS_COLOR: Rgb<u8> = Rgb([16, 16, 16]);
 const BASE_GRAPH_LINE_COLOR: Rgb<u8> = Rgb([32, 64, 200]);
 
-pub const GRAPH_NUM_DAYS: usize = 7;
 const MAIN_LINE_THICKNESS: usize = 5;
 const GRAPH_LINE_THICKNESS: usize = 7;
 const CIRCLE_OUTER_RADIUS: usize = 9;
@@ -28,7 +27,6 @@ pub struct Imagen{
 
 impl Imagen {
     pub fn new_empty_graph(res_x: usize, res_y: usize, timescale: usize, y_min: f64, y_max: f64) -> Self{
-        //let mut graph: Vec<Rgb<u8>> = Vec::with_capacity(res_x*res_y);
         let mut graph = vec![BACKGROUND_COLOR; res_x*res_y];
 
         let week_delta = res_x/timescale;
@@ -51,8 +49,6 @@ impl Imagen {
         let current_time = chrono::offset::Local::now();
         let eod_timestamp = chrono::offset::Local.with_ymd_and_hms(current_time.year(), current_time.month(), current_time.day(), 23, 59, 59).unwrap().timestamp();
         let t0 = eod_timestamp - ((timescale * 24 * 3600) as i64);
-
-        println!("x_min: {t0}");
 
         return Self{
             buffer: graph,

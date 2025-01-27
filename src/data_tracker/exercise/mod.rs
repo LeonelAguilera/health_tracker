@@ -1,8 +1,10 @@
-use std::fs;
+use std::{fs, time::{SystemTime, UNIX_EPOCH}};
 
 use chrono::Datelike;
 use json::{object::Object, JsonValue};
 use rusqlite::Connection;
+
+use crate::http::httperrors::HttpError;
 
 const EXERCISE_PLAN_PATH: &str = "databases/exercise_plan.json";
 
@@ -36,11 +38,35 @@ impl Ejercicio {
         })
     }
 
+    pub fn to_htmx_form(&self, current_exercise: usize, curr_set: usize) -> Result<Vec<u8>, HttpError>{
+        if self.weight.len() != self.n_reps.len(){
+            return Err(HttpError::InternalServerError("Data was stored malformed for this exercise"));
+        }
+        if curr_set >= self.weight.len(){
+            return Err(HttpError::NotFound("This exercise does not have this many sets"));
+        }
+
+        let exercise_name = self.name.clone();
+        let weight = self.weight[curr_set];
+        let reps = self.n_reps[curr_set];
+
+        let mut next_set = curr_set + 1;
+        let mut next_exercise = current_exercise;
+        if next_set == self.n_reps.len(){
+            next_set = 0;
+            next_exercise += 1;
+        }
+        let response = format!(include_str!("../../../html/templates/exercise_data_form.html"), exercise_name = exercise_name, current_set = (curr_set + 1), weight = weight, reps = reps, next_exercise = next_exercise, next_set = next_set);
+        return Ok(response.as_bytes().to_vec());
+    }
+
     fn update(&mut self, db: &Connection){
         let (n_reps, weight): (Vec<_>, Vec<_>) = (1..(self.n_reps.len() as u8 + 1)).map(|serie| read_data_from_db(db, &self.name, serie)).unzip();
 
         self.n_reps = n_reps;
         self.weight = weight;
+
+        assert_eq!(self.n_reps.len(), self.weight.len());
     }
 }
 
@@ -165,3 +191,55 @@ fn read_data_from_db(db: &Connection, exercise_name: &String, serie: u8) -> (u8,
     return db.query_row(&query, [], |row| Ok((row.get::<usize, u8>(0).unwrap_or(0), row.get::<usize, u16>(1).unwrap_or(0)))).unwrap_or((0, 0));
 }
 
+pub fn log_exercise(db: &Connection, plan: &mut PlanEjercicio, query: &str, payload: &String) -> Result<Vec<u8>, HttpError>{
+    let _ = save_exercise_in_db(db, payload)?;
+
+    plan.update(db);
+    let plan = plan.get_todays_list();
+
+    let mut params = query.split("/");
+    let exercise = params.nth(2);
+    let exercise = exercise.ok_or(HttpError::BadRequest("Next exercise index not included"))?.parse::<usize>().map_err(|_|HttpError::BadRequest("Invalid exercise index"))?;
+    if exercise >= plan.len(){
+        return Ok(Vec::new());
+    }
+
+    let set = params.next().ok_or(HttpError::BadRequest("Next set not included"))?.parse::<usize>().map_err(|_|HttpError::BadRequest("Invalid set index"))?;
+
+    plan[exercise].to_htmx_form(exercise, set)
+}
+
+fn save_exercise_in_db(db: &Connection, payload: &String) -> Result<(), HttpError>{
+    let mut exercise_name = None;
+    let mut current_set = None;
+    let mut weight = None;
+    let mut repetitions = None;
+
+    for element in payload.split("&"){
+        let split_parameter = element.split("=").collect::<Vec<_>>();
+        match split_parameter[0] {
+            "exercise_name" => exercise_name = Some(split_parameter[1].to_owned()),
+            "current_set" => current_set = Some(split_parameter[1].parse::<usize>()),
+            "weight" => weight = Some(split_parameter[1].parse::<f64>()),
+            "repetitions" => repetitions = Some(split_parameter[1].parse::<usize>()),
+            _ => {},
+        }
+    }
+
+    let exercise_name = exercise_name.ok_or(HttpError::BadRequest("Missing parameter \"exercise_name\""))?;
+    let current_set = current_set.ok_or(HttpError::BadRequest("Missing parameter \"current_set\""))?.map_err(|_|HttpError::BadRequest("Bad format on \"series\" parameter"))?;
+    let weight = weight.ok_or(HttpError::BadRequest("Missing parameter \"weight\""))?.map_err(|_|HttpError::BadRequest("Bad format on \"series\" parameter"))?;
+    let repetitions = repetitions.ok_or(HttpError::BadRequest("Missing parameter \"repetitions\""))?.map_err(|_|HttpError::BadRequest("Bad format on \"repetitions\" parameter"))?;
+    let current_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+
+    let _ = db.execute("INSERT INTO exercise_data VALUES (:tim, :exercise_name, :wset, :duration, :repetitions, :weight);", &[
+                       (":tim", current_timestamp.to_string().as_str()),
+                       (":exercise_name", exercise_name.as_str()),
+                       (":wset", current_set.to_string().as_str()),
+                       (":duration", 0_i64.to_string().as_str()),
+                       (":repetitions", repetitions.to_string().as_str()),
+                       (":weight", weight.to_string().as_str()),
+    ]).map_err(|_|HttpError::InsuficientStorage("Could not save the new data"))?;
+
+    return Ok(());
+}

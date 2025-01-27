@@ -3,7 +3,7 @@
 mod http;
 mod data_tracker;
 mod graph_maker;
-use data_tracker::{exercise::{build_graph_htmx_from_exercise_plan, PlanEjercicio}, scale::ScaleParameters};
+use data_tracker::{exercise::{build_graph_htmx_from_exercise_plan, log_exercise, PlanEjercicio}, scale::ScaleParameters};
 use graph_maker::graph_handler;
 use http::{byte_stream_response, empty_ok, not_found, simple_file_response, RequestType::{self, GET, POST}, OK};
 
@@ -16,21 +16,21 @@ use rusqlite::Connection;
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
     let db = open_database();
-    let exercise_plan = PlanEjercicio::new(&db).unwrap();
+    let mut exercise_plan = PlanEjercicio::new(&db).unwrap();
 
     for stream in listener.incoming(){
         let stream = stream.unwrap();
 
         println!("Conexión establecida");
-        connection_handler(stream, &db, &exercise_plan);
+        connection_handler(stream, &db, &mut exercise_plan);
     }
 }
 
-fn connection_handler(stream: TcpStream, db: &Connection, exercise_plan: &PlanEjercicio){
+fn connection_handler(stream: TcpStream, db: &Connection, exercise_plan: &mut PlanEjercicio){
     let request = RequestType::new(&stream).unwrap();
     println!("{request:#?}");
     match request {
-        GET(contents) => match  contents.query.as_str() {
+        GET(contents) => match contents.query.as_str() {
             "/" => simple_file_response(stream, "html/index.html"),
             "/scale_data" => simple_file_response(stream, "html/templates/health_data.html"),
             "/train_data" => {
@@ -38,6 +38,10 @@ fn connection_handler(stream: TcpStream, db: &Connection, exercise_plan: &PlanEj
                 byte_stream_response(stream, OK, Ok(build_graph_htmx_from_exercise_plan(today_plan).as_bytes().to_vec()))
             },
             "/new_data_form" => simple_file_response(stream, "html/templates/new_data_form.html"),
+            "/new_training" => {
+                let today_plan = exercise_plan.get_todays_list();
+                byte_stream_response(stream, OK, today_plan[0].to_htmx_form(0, 0));
+            },
             query if query.starts_with("/styles/") => simple_file_response(stream, &query[1..]),
             query if query.starts_with("/graph/")  => {println!("Serving graph"); byte_stream_response(stream, OK, graph_handler(db, query))},
             _ => {
@@ -45,7 +49,8 @@ fn connection_handler(stream: TcpStream, db: &Connection, exercise_plan: &PlanEj
             },
         },
         POST(contents) => match  contents.query.as_str() {
-            "/update" => {ScaleParameters::from_str(&contents.payload.unwrap()).unwrap().save_to_db(db); empty_ok(stream);},
+            "/update_scale" => {ScaleParameters::from_str(&contents.payload.unwrap()).unwrap().save_to_db(db); empty_ok(stream);},
+            query if query.starts_with("/submit_exercise/") => byte_stream_response(stream, OK, log_exercise(db, exercise_plan, query, &contents.payload.unwrap())),
             _ => {
                 not_found(stream)
             },

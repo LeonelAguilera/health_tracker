@@ -1,25 +1,32 @@
-
+#![deny(clippy::unwrap_used)]
+#![allow(clippy::needless_return)]
+#![allow(clippy::redundant_closure)]
 //Internal modules
 mod http;
 mod data_tracker;
 mod graph_maker;
 use data_tracker::{exercise::{build_graph_htmx_from_exercise_plan, log_exercise, PlanEjercicio}, scale::ScaleParameters};
 use graph_maker::graph_handler;
-use http::{byte_stream_response, empty_ok, not_found, simple_file_response, RequestType::{self, GET, POST}, OK};
+use http::{byte_stream_response, empty_ok, httperrors::HttpError, not_found, send_error, simple_file_response, RequestType::{self, GET, POST}, OK};
 
+use core::panic;
 //Standard library
 use std::{net::{TcpListener, TcpStream}, str::FromStr, time::{SystemTime, UNIX_EPOCH}};
 
 //Third party libraries
 use rusqlite::Connection;
 
+
 fn main() {
-    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+    let listener = TcpListener::bind("127.0.0.1:7878").expect("Could not bind TcpListener to provided address");
     let db = open_database();
-    let mut exercise_plan = PlanEjercicio::new(&db).unwrap();
+    let mut exercise_plan = PlanEjercicio::new(&db).expect("Could not read exercise plan");
 
     for stream in listener.incoming(){
-        let stream = stream.unwrap();
+        let stream = match stream {
+            Ok(stream) => stream,
+            Err(_) => continue,
+        };
 
         println!("Conexión establecida");
         connection_handler(stream, &db, &mut exercise_plan);
@@ -27,7 +34,10 @@ fn main() {
 }
 
 fn connection_handler(stream: TcpStream, db: &Connection, exercise_plan: &mut PlanEjercicio){
-    let request = RequestType::new(&stream).unwrap();
+    let request = match RequestType::new(&stream){
+        Ok(request) => request,
+        Err(_) => {send_error(&stream, HttpError::InternalServerError("Could not read request")); return;},
+    };
     println!("{request:#?}");
     match request {
         GET(contents) => match contents.query.as_str() {
@@ -35,22 +45,30 @@ fn connection_handler(stream: TcpStream, db: &Connection, exercise_plan: &mut Pl
             "/scale_data" => simple_file_response(stream, "html/templates/health_data.html"),
             "/train_data" => {
                 let today_plan = exercise_plan.get_todays_list();
-                byte_stream_response(stream, OK, Ok(build_graph_htmx_from_exercise_plan(today_plan).as_bytes().to_vec()))
+                byte_stream_response(&stream, OK, Ok(build_graph_htmx_from_exercise_plan(today_plan).as_bytes().to_vec()))
             },
             "/new_data_form" => simple_file_response(stream, "html/templates/new_data_form.html"),
             "/new_training" => {
                 let today_plan = exercise_plan.get_todays_list();
-                byte_stream_response(stream, OK, today_plan[0].to_htmx_form(0, 0));
+                byte_stream_response(&stream, OK, today_plan[0].to_htmx_form(0, 0));
             },
             query if query.starts_with("/styles/") => simple_file_response(stream, &query[1..]),
-            query if query.starts_with("/graph/")  => {println!("Serving graph"); byte_stream_response(stream, OK, graph_handler(db, query))},
+            query if query.starts_with("/graph/")  => {println!("Serving graph"); byte_stream_response(&stream, OK, graph_handler(db, query))},
             _ => {
                 not_found(stream)
             },
         },
         POST(contents) => match  contents.query.as_str() {
-            "/update_scale" => {ScaleParameters::from_str(&contents.payload.unwrap()).unwrap().save_to_db(db); empty_ok(stream);},
-            query if query.starts_with("/submit_exercise/") => byte_stream_response(stream, OK, log_exercise(db, exercise_plan, query, &contents.payload.unwrap())),
+            "/update_scale" => contents.payload
+                .ok_or(HttpError::BadRequest("No payload found"))
+                .and_then(|payload| String::from_utf8(payload).map_err(|_| HttpError::BadRequest("Impossible to parse payload")))
+                .and_then(|payload_str| ScaleParameters::from_str(&payload_str))
+                .and_then(|scale| scale.save_to_db(db))
+                .map_or_else(|err| send_error(&stream, err), |_| empty_ok(&stream)),
+            query if query.starts_with("/submit_exercise/") => contents.payload
+                .ok_or(HttpError::BadRequest("No payload found"))
+                .and_then(|payload| String::from_utf8(payload).map_err(|_|HttpError::BadRequest("Impossible to parse payload")))
+                .map_or_else(|err| send_error(&stream, err), |payload_str| byte_stream_response(&stream, OK, log_exercise(db, exercise_plan, query, &payload_str))),
             _ => {
                 not_found(stream)
             },
@@ -62,7 +80,7 @@ fn connection_handler(stream: TcpStream, db: &Connection, exercise_plan: &mut Pl
 }
 
 fn open_database() -> Connection {
-    let con = Connection::open("./databases/data.db3").unwrap();
+    let con = Connection::open("./databases/data.db3").expect("Could not open database");
 
     if let Err(err) = con.execute("CREATE TABLE IF NOT EXISTS scale_data (
             timev INTEGER UNSIGNED PRIMARY KEY,
@@ -78,6 +96,7 @@ fn open_database() -> Connection {
             hip_diameter DECIMAL(4,2) NOT NULL
             );", ()){
         println!("Database scale_data table creation failed: {err}");
+        panic!();
     }
     if let Err(err) = con.execute("CREATE TABLE IF NOT EXISTS exercise_data(
             timev INTEGER UNSIGNED PRIMARY KEY,
@@ -88,6 +107,7 @@ fn open_database() -> Connection {
             weight SMALLINT UNSIGNED
             );", ()){
         println!("Database exercise_data table creation failed: {err}");
+        panic!();
     }
 
     //insert_dummy_data(&con);
@@ -97,7 +117,7 @@ fn open_database() -> Connection {
 
 #[allow(dead_code)]
 fn insert_dummy_data(con:  &Connection){
-    let current_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    let current_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).expect("Today is earlier than the Unix Epoch (at least in current system time)").as_secs();
     let half_day_diff = 12*3600;
 
     for i in 0..28{

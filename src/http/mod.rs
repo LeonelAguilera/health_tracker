@@ -2,19 +2,18 @@ pub mod httperrors;
 use std::{fs, io::{BufReader, Read, Write}, net::TcpStream};
 
 use httperrors::HttpError;
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-///
 pub const OK: &str = "HTTP/1.1 200 OK";
 
 #[derive(Debug)]
 pub struct HttpPacket{
     pub query: String,
     pub _version: String,
-    pub payload: Option<String>,
+    pub payload: Option<Vec<u8>>,
 }
 
 #[derive(Debug)]
 #[allow(unused)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum RequestType{
     OPTIONS(HttpPacket),
     GET(HttpPacket),
@@ -44,7 +43,7 @@ impl RequestType{
         }
 
         let mut header = buf.lines();
-        let request_line = header.next().unwrap();
+        let request_line = header.next().ok_or(())?;
 
         let parts: Vec<&str> = request_line.split(" ").collect();
         if parts.len() != 3{
@@ -52,12 +51,7 @@ impl RequestType{
         }
         let payload_size = header
             .find(|line| line.starts_with("Content-Length: "))
-            .and_then(|linea| {
-                match linea.split(": ").nth(1) {
-                    Some(longitud) => Some(String::from(longitud)),
-                    None => None,
-                }
-            })
+            .and_then(|linea| linea.split(": ").nth(1).map(String::from))
             .and_then(|longitud| longitud.trim().parse::<usize>().ok())
             .unwrap_or(0);
 
@@ -68,9 +62,8 @@ impl RequestType{
                 if payload_size > 0{
                     let mut buf = vec![0; payload_size];
                     let _ = buf_reader.read_exact(&mut buf);
-                    let payload_str = String::from_utf8(buf).unwrap();
 
-                    Some(payload_str)
+                    Some(buf)
                 }
                 else{
                     None
@@ -101,10 +94,10 @@ pub fn not_found(stream: TcpStream){
 }
 
 pub fn file_response(stream: TcpStream, status_line: &str, path: &str){
-    byte_stream_response(stream, status_line, Ok(fs::read_to_string(path).unwrap().into_bytes()));
+    byte_stream_response(&stream, status_line, fs::read_to_string(path).map_or_else(|_|Err(HttpError::InternalServerError("Could not read response file")), |file| Ok(file.into_bytes())));
 }
 
-pub fn byte_stream_response(mut stream: TcpStream, status_line: &str, byte_stream: Result<Vec<u8>, HttpError>){
+pub fn byte_stream_response(mut stream: &TcpStream, status_line: &str, byte_stream: Result<Vec<u8>, HttpError>){
     match byte_stream {
         Ok(mut byte_stream) => {
             let mut response = format!("{status_line}\r\nContent-Length: {}\r\n\r\n", byte_stream.len()).into_bytes();
@@ -115,11 +108,11 @@ pub fn byte_stream_response(mut stream: TcpStream, status_line: &str, byte_strea
     }
 }
 
-pub fn empty_ok(mut stream: TcpStream){
+pub fn empty_ok(mut stream: &TcpStream){
     let _ = stream.write_all(OK.as_bytes());
 }
 
-pub fn send_error(mut stream: TcpStream, error: HttpError) {
+pub fn send_error(mut stream: &TcpStream, error: HttpError) {
     let status_line = format!("HTTP/1.1 {} {}", error.error_code(), error.message());
     let _ = stream.write_all(&status_line.into_bytes());
 }

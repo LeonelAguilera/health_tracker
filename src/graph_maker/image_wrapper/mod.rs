@@ -3,6 +3,8 @@ use std::io::Cursor;
 use chrono::{Datelike, TimeZone};
 use image::{Rgb, RgbImage};
 
+use crate::http::httperrors::HttpError;
+
 const IMPORTANT_TIMES: &[f64] = &[7.0, 18.5, 19.5];
 
 const BACKGROUND_COLOR: Rgb<u8> = Rgb([255, 255, 255]);
@@ -61,14 +63,14 @@ impl Imagen {
         };
     }
 
-    pub fn draw_line(&mut self, data: &Vec<(i64, f64)>){
+    pub fn draw_line(&mut self, data: &[(i64, f64)]){
         let time_scale_factor = (self.x_max - self.x_min)/(self.width as i64);
         let y_scale_factor = (self.y_max - self.y_min)/(self.height as f64);
 
         let data: Vec<(f64, f64)> = data.iter()
             .map(|datapoint| (
                     ((datapoint.0 - self.x_min)/time_scale_factor) as f64,
-                    ((self.y_max - datapoint.1)/y_scale_factor) as f64
+                    ((self.y_max - datapoint.1)/y_scale_factor)
                     )
                 )
             .collect();
@@ -90,7 +92,7 @@ impl Imagen {
                 let y = ((x as f64)*m + n) as usize;
                 let y_delta = ((GRAPH_LINE_THICKNESS as f64)/(2.0 * f64::cos(f64::atan(m)))) as usize;
 
-                for y in (y.checked_sub(y_delta).unwrap_or(0))..y.min(self.height){
+                for y in (y.saturating_sub(y_delta))..y.min(self.height){
                     let index = (y * self.width) + x;
                     self.buffer[index] = BASE_GRAPH_LINE_COLOR;
                 }
@@ -99,9 +101,9 @@ impl Imagen {
         
         //Dibujar círculos
         for datapoint in data{
-            let x_min = (datapoint.0 as usize).checked_sub(CIRCLE_OUTER_RADIUS).unwrap_or(0);
+            let x_min = (datapoint.0 as usize).saturating_sub(CIRCLE_OUTER_RADIUS);
             let x_max = (datapoint.0 as usize + CIRCLE_OUTER_RADIUS).min(self.width);
-            let y_min = (datapoint.1 as usize).checked_sub(CIRCLE_OUTER_RADIUS).unwrap_or(0);
+            let y_min = (datapoint.1 as usize).saturating_sub(CIRCLE_OUTER_RADIUS);
             let y_max = (datapoint.1 as usize + CIRCLE_OUTER_RADIUS).min(self.height);
 
             for y in y_min..y_max{
@@ -141,15 +143,14 @@ impl Imagen {
         }
     }
 
-    pub fn into_bytes(&self) -> Vec<u8>{
+    pub fn to_bytes(&self) -> Result<Vec<u8>, HttpError>{
         let graph = self.buffer.iter()
-            .map(|pix| Vec::from(pix.0))
-            .flatten()
+            .flat_map(|pix| Vec::from(pix.0))
             .collect::<Vec<u8>>();
-        let image = RgbImage::from_raw(self.width as u32, self.height as u32, graph).unwrap();
+        let image = RgbImage::from_raw(self.width as u32, self.height as u32, graph).ok_or(HttpError::InternalServerError("Wrong image buffer size for expected dimensions. Could not render image"))?;
         let mut buffer: Vec<u8> = Vec::new();
         let _ = image.write_to(&mut Cursor::new(&mut buffer), image::ImageFormat::Png);
 
-        return buffer;
+        return Ok(buffer);
     }
 }

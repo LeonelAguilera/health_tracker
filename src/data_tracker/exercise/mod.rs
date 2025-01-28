@@ -16,17 +16,17 @@ pub struct Ejercicio{
 }
 
 impl Ejercicio {
-    fn new(db: &Connection, origin: &Object) -> Result<Self, String>{
-        let name = origin.get("Name").ok_or_else(|| "Malformed JSON:\n\tOn exercise creation\n\tExercise name does not exist".to_string())?;
+    fn new(db: &Connection, origin: &Object) -> Result<Self, HttpError>{
+        let name = origin.get("Name").ok_or(HttpError::InternalServerError("Malformed JSON:\n\tOn exercise creation\n\tExercise name does not exist"))?;
         let name = match name {
             JsonValue::Short(name) => name.to_string(),
             JsonValue::String(name) => name.to_string(),
-            f => return Err(format!("Malformed JSON:\n\tOn exercise creation\n\tExpected String on exercise name\n\tInstead got: {f:#?}").to_string()),
+            _ => return Err(HttpError::InternalServerError("Malformed JSON:\n\tOn exercise creation\n\tExpected String on exercise name")),
         };
-        let series = origin.get("Series").ok_or_else(|| "Malformed JSON:\n\tOn exercise creation\n\tExercise reps does not exist".to_string())?;
+        let series = origin.get("Series").ok_or(HttpError::InternalServerError("Malformed JSON:\n\tOn exercise creation\n\tExercise reps does not exist"))?;
         let series: f64 = match series {
             JsonValue::Number(series) => (*series).into(),
-            f => return Err(format!("Malformed JSON:\n\tOn exercise creation\n\tExpected Number on exercise name\n\tInstead got: {f:#?}").to_string()),
+            _ => return Err(HttpError::InternalServerError("Malformed JSON:\n\tOn exercise creation\n\tExpected Number on exercise name")),
         };
 
         let (n_reps, weight): (Vec<_>, Vec<_>) = (1..(series as u8 + 1)).map(|serie| read_data_from_db(db, &name, serie)).unzip();
@@ -93,13 +93,13 @@ impl ColeccionEjercicios {
 pub struct PlanEjercicio([Vec<ColeccionEjercicios>; 7]);
 
 impl PlanEjercicio {
-    pub fn new(db: &Connection) -> Result<Self, String>{
-        let exercise_plan = fs::read_to_string(EXERCISE_PLAN_PATH).unwrap();
-        let exercise_plan = json::parse(&exercise_plan).or(Err("Malformed JSON".to_string()))?;
+    pub fn new(db: &Connection) -> Result<Self, HttpError>{
+        let exercise_plan = fs::read_to_string(EXERCISE_PLAN_PATH).map_err(|_|HttpError::InternalServerError("Failed to load training plan"))?;
+        let exercise_plan = json::parse(&exercise_plan).or(Err(HttpError::InternalServerError("Malformed training plan")))?;
 
         let semanario = match exercise_plan {
             JsonValue::Object(semanario) => semanario,
-            f => return Err(format!("Malformed JSON\n\tOn first read\n\tExpected parent object to be Object\n\tInstead got: {f:#?}").to_string()),
+            _ => return Err(HttpError::InternalServerError("Malformed JSON\n\tOn first read\n\tExpected parent object to be Object")),
         };
 
         semanario.iter().map(|dia| {
@@ -114,25 +114,25 @@ impl PlanEjercicio {
                                 ejercicios.iter().map(|o_ejercicio|{
                                     match o_ejercicio {
                                         JsonValue::Object(ejercicio) => Ejercicio::new(db, ejercicio),
-                                        f => Err(format!("Malformed JSON:\n\tOn Switch\n\tExpected JsonValue::Object inside Array\n\tInstead found: {f:#?}").to_string()),
+                                        _ => Err(HttpError::InternalServerError("Malformed JSON:\n\tOn Switch\n\tExpected JsonValue::Object inside Array")),
                                     }
-                                }).collect::<Result<Vec<Ejercicio>,String>>()
+                                }).collect::<Result<Vec<Ejercicio>,HttpError>>()
                                 .map(|switch_content|ColeccionEjercicios::Switch(switch_content))
                             }
                             else{
-                                Err(format!("Malformed JSON:\n\tOn exercise kind selection\n\tExpected either Object Single or Array Switch\n\tInstead got: {tipo_ejercicio:#?}").to_string())
+                                Err(HttpError::InternalServerError("Malformed JSON:\n\tOn exercise kind selection\n\tExpected either Object Single or Array Switch"))
                             }
                         }
                         else{
-                            Err(format!("Malformed JSON:\n\tOn exercise kind reading\n\tExpected the input type to be an object\n\tInstead got: {entrada:#?}").to_string())
+                            Err(HttpError::InternalServerError("Malformed JSON:\n\tOn exercise kind reading\n\tExpected the input type to be an object"))
                         }
-                    }).collect::<Result<Vec<ColeccionEjercicios>,String>>(),
-                (f, _) => Err(format!("Malformed JSON\n\tOn {f} plan reading\n\tExpected Array\n\tInstead got: {f:#?}").to_string()),
+                    }).collect::<Result<Vec<ColeccionEjercicios>,HttpError>>(),
+                _ => Err(HttpError::InternalServerError("Malformed JSON\n\tOn {f} plan reading\n\tExpected Array")),
             }
-        }).collect::<Result<Vec<Vec<ColeccionEjercicios>>, String>>()?
+        }).collect::<Result<Vec<Vec<ColeccionEjercicios>>, HttpError>>()?
         .try_into()
             .ok()
-            .ok_or("Malformed JSON:\n\tWeek len was not 7 days".to_string())
+            .ok_or(HttpError::InternalServerError("Malformed JSON:\n\tWeek len was not 7 days"))
             .map(|contents| Self(contents))
     }
 
@@ -141,7 +141,7 @@ impl PlanEjercicio {
         let weekday = now.weekday().num_days_from_monday() as usize;
         let current_day = now.ordinal() as usize;
 
-        self.0[weekday].iter().map(|coleccion| match coleccion {
+        self.0[weekday].iter().flat_map(|coleccion| match coleccion {
             ColeccionEjercicios::Single(ejercicio) => Vec::from([ejercicio.clone()]),
             ColeccionEjercicios::Switch(ejercicios) => {
                 let switch_len = ejercicios.len();
@@ -149,7 +149,7 @@ impl PlanEjercicio {
                 ejercicios.rotate_right(current_day % switch_len);
                 ejercicios
             }
-        }).flatten().collect()
+        }).collect()
     }
 
     pub fn update(&mut self, db: &Connection) {
@@ -191,8 +191,8 @@ fn read_data_from_db(db: &Connection, exercise_name: &String, serie: u8) -> (u8,
     return db.query_row(&query, [], |row| Ok((row.get::<usize, u8>(0).unwrap_or(0), row.get::<usize, u16>(1).unwrap_or(0)))).unwrap_or((0, 0));
 }
 
-pub fn log_exercise(db: &Connection, plan: &mut PlanEjercicio, query: &str, payload: &String) -> Result<Vec<u8>, HttpError>{
-    let _ = save_exercise_in_db(db, payload)?;
+pub fn log_exercise(db: &Connection, plan: &mut PlanEjercicio, query: &str, payload: &str) -> Result<Vec<u8>, HttpError>{
+    save_exercise_in_db(db, payload)?;
 
     plan.update(db);
     let plan = plan.get_todays_list();
@@ -209,7 +209,7 @@ pub fn log_exercise(db: &Connection, plan: &mut PlanEjercicio, query: &str, payl
     plan[exercise].to_htmx_form(exercise, set)
 }
 
-fn save_exercise_in_db(db: &Connection, payload: &String) -> Result<(), HttpError>{
+fn save_exercise_in_db(db: &Connection, payload: &str) -> Result<(), HttpError>{
     let mut exercise_name = None;
     let mut current_set = None;
     let mut weight = None;
@@ -230,7 +230,7 @@ fn save_exercise_in_db(db: &Connection, payload: &String) -> Result<(), HttpErro
     let current_set = current_set.ok_or(HttpError::BadRequest("Missing parameter \"current_set\""))?.map_err(|_|HttpError::BadRequest("Bad format on \"series\" parameter"))?;
     let weight = weight.ok_or(HttpError::BadRequest("Missing parameter \"weight\""))?.map_err(|_|HttpError::BadRequest("Bad format on \"series\" parameter"))?;
     let repetitions = repetitions.ok_or(HttpError::BadRequest("Missing parameter \"repetitions\""))?.map_err(|_|HttpError::BadRequest("Bad format on \"repetitions\" parameter"))?;
-    let current_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    let current_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|_|HttpError::InternalServerError("Server time previous to Unix Epoch"))?.as_secs();
 
     let _ = db.execute("INSERT INTO exercise_data VALUES (:tim, :exercise_name, :wset, :duration, :repetitions, :weight);", &[
                        (":tim", current_timestamp.to_string().as_str()),

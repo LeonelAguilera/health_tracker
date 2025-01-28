@@ -2,6 +2,8 @@ use std::{str::FromStr, time::{SystemTime, UNIX_EPOCH}};
 
 use rusqlite::Connection;
 
+use crate::http::httperrors::HttpError;
+
 #[derive(Debug)]
 pub struct ScaleParameters{
     pub weight: f64,
@@ -17,10 +19,10 @@ pub struct ScaleParameters{
 }
 
 impl ScaleParameters {
-    pub fn save_to_db(&self, db: &Connection){
-        let current_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    pub fn save_to_db(&self, db: &Connection) -> Result<usize, HttpError>{
+        let current_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|_|HttpError::InternalServerError("Internal server time is behind Unix Epoch"))?.as_secs();
 
-        if let Err(err) = db.execute("INSERT INTO scale_data VALUES (:tim, :weight, :imc, :body_fat, :visceral_fat, :muscle, :water, :protein, :metabolism, :bone_mass, :hip_diameter);", &[
+        db.execute("INSERT INTO scale_data VALUES (:tim, :weight, :imc, :body_fat, :visceral_fat, :muscle, :water, :protein, :metabolism, :bone_mass, :hip_diameter);", &[
                            (":tim", current_timestamp.to_string().as_str()),          
                            (":weight", self.weight.to_string().as_str()),
                            (":imc", self.imc.to_string().as_str()),
@@ -32,14 +34,12 @@ impl ScaleParameters {
                            (":metabolism", self.metabolism.to_string().as_str()),
                            (":bone_mass", self.bone_mass.to_string().as_str()),
                            (":hip_diameter", self.hip_diameter.to_string().as_str()),
-        ]){
-            println!("Database update failed: {err}");
-        }
+        ]).map_err(|_|HttpError::InsuficientStorage("Could not save received data"))
     }
 }
 
 impl FromStr for ScaleParameters {
-    type Err = ();
+    type Err = HttpError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut weight: Option<f64> = None;
         let mut imc: Option<f64> = None;
@@ -71,16 +71,16 @@ impl FromStr for ScaleParameters {
         }
 
         Ok(Self{
-            weight: match weight{Some(val) => val, None => return Err(())},
-            imc: match imc{Some(val) => val, None => return Err(())},
-            body_fat: match body_fat{Some(val) => val, None => return Err(())},
-            visceral_fat: match visceral_fat{Some(val) => val, None => return Err(())},
-            muscle: match muscle{Some(val) => val, None => return Err(())},
-            water: match water{Some(val) => val, None => return Err(())},
-            protein: match protein{Some(val) => val, None => return Err(())},
-            metabolism: match metabolism{Some(val) => val, None => return Err(())},
-            bone_mass: match bone_mass{Some(val) => val, None => return Err(())},
-            hip_diameter: match hip_diameter{Some(val) => val, None => return Err(())},
+			weight: match weight{Some(val) => val, None => return Err(HttpError::BadRequest("Missing or malformed \"weight\" parameter"))},
+			imc: match imc{Some(val) => val, None => return Err(HttpError::BadRequest("Missing or malformed \"imc\" parameter"))},
+			body_fat: match body_fat{Some(val) => val, None => return Err(HttpError::BadRequest("Missing or malformed \"body_fat\" parameter"))},
+			visceral_fat: match visceral_fat{Some(val) => val, None => return Err(HttpError::BadRequest("Missing or malformed \"visceral_fat\" parameter"))},
+			muscle: match muscle{Some(val) => val, None => return Err(HttpError::BadRequest("Missing or malformed \"muscle\" parameter"))},
+			water: match water{Some(val) => val, None => return Err(HttpError::BadRequest("Missing or malformed \"water\" parameter"))},
+			protein: match protein{Some(val) => val, None => return Err(HttpError::BadRequest("Missing or malformed \"protein\" parameter"))},
+			metabolism: match metabolism{Some(val) => val, None => return Err(HttpError::BadRequest("Missing or malformed \"metabolism\" parameter"))},
+			bone_mass: match bone_mass{Some(val) => val, None => return Err(HttpError::BadRequest("Missing or malformed \"bone_mass\" parameter"))},
+			hip_diameter: match hip_diameter{Some(val) => val, None => return Err(HttpError::BadRequest("Missing or malformed \"hip_diameter\" parameter"))},
         })
     }
 }

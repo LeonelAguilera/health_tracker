@@ -43,7 +43,7 @@ impl GraphType {
                                         ORDER BY timev DESC
                                         LIMIT 1
                                     );");
-                let mut statement = db.prepare(&query).unwrap();
+                let mut statement = db.prepare(&query).map_err(|_|HttpError::InternalServerError("Could not prepare internal SQL statement"))?;
                 return statement.query_map(params_from_iter(parameters.iter()), |row| {
                         let date = row.get::<usize, i64>(0);
                         let value = row.get::<usize, f64>(1);
@@ -80,7 +80,7 @@ impl GraphType {
                     .map(|selector_data|{
                         let mut parameters = parameters.clone();
                         parameters.push(selector_data.to_owned());
-                        let mut statement = db.prepare(&query).unwrap();
+                        let mut statement = db.prepare(&query).map_err(|_|HttpError::InternalServerError("Could not prepare internal SQL statement"))?;
                         let return_val = statement.query_map(params_from_iter(parameters.iter()), |row| {
                             let date = row.get::<usize, i64>(0);
                             let value = row.get::<usize, f64>(1);
@@ -95,7 +95,7 @@ impl GraphType {
                         .map_err(|_| HttpError::InternalServerError("Could not get the requested data"))?
                         .collect::<Result<Vec<(i64, f64)>,_>>()
                         .map_err(|_| HttpError::InternalServerError("Could not get all the data"))?;
-                        if return_val.len() < 1{
+                        if return_val.is_empty() {
                             Err(HttpError::NotFound("No data to plot"))
                         }
                         else{
@@ -148,7 +148,7 @@ impl GraphData {
         let mut lhs = parts.next().ok_or(HttpError::BadRequest("No graph type selected"))?;
         let mut static_db_data = Vec::new();
 
-        while ALLOWED_GRAPH_TYPES.contains(&lhs) == false {
+        while !ALLOWED_GRAPH_TYPES.contains(&lhs) {
             let rhs = parts.next().ok_or(HttpError::BadRequest("Column without value"))?;
             static_db_data.push((lhs.to_string(), rhs.to_string()));
             lhs = parts.next().ok_or(HttpError::BadRequest("No graph type selected"))?;
@@ -168,16 +168,16 @@ impl GraphData {
 
     fn fetch_data_from_db(&self, db: &Connection) -> Result<Vec<Vec<(i64, f64)>>, HttpError>{
         let query = "SELECT * FROM sqlite_master WHERE type='table'";
-        let mut statement = db.prepare(query).unwrap();
+        let mut statement = db.prepare(query).map_err(|_|HttpError::InternalServerError("Could not prepare SQL statement"))?;
 
-        let allowed_tables_names = statement.query_map([], |row| row.get::<usize, String>(1)).unwrap().collect::<Result<Vec<String>, _>>().map_err(|_| HttpError::InternalServerError("Unable of reading table names"))?;
+        let allowed_tables_names = statement.query_map([], |row| row.get::<usize, String>(1)).map_err(|_| HttpError::InternalServerError("Unable of reading table names"))?.collect::<Result<Vec<String>, _>>().map_err(|_| HttpError::InternalServerError("Unable of reading table names"))?;
         if !allowed_tables_names.contains(&self.source_table){
             return Err(HttpError::BadRequest("Invalid table name"));
         }
 
         let query = format!("PRAGMA table_info({})", self.source_table);
-        statement = db.prepare(&query).unwrap();
-        let allowed_column_names = statement.query_map([], |row| row.get::<usize, String>(1)).unwrap().collect::<Result<Vec<String>, _>>().map_err(|_| HttpError::InternalServerError("Unable of reading column names"))?;
+        statement = db.prepare(&query).map_err(|_|HttpError::InternalServerError("Could not prepare SQL statement"))?;
+        let allowed_column_names = statement.query_map([], |row| row.get::<usize, String>(1)).map_err(|_| HttpError::InternalServerError("Unable of reading column names"))?.collect::<Result<Vec<String>, _>>().map_err(|_| HttpError::InternalServerError("Unable of reading column names"))?;
         if !allowed_column_names.contains(&self.source_column){
             return Err(HttpError::BadRequest("Invalid column name"));
         }
@@ -214,7 +214,7 @@ pub fn graph_handler(db: &Connection, query: &str) -> Result<Vec<u8>, HttpError>
     for data_collection in data{
         image.draw_line(&data_collection);
     }
-    return Ok(image.into_bytes());
+    return image.to_bytes();
 }
 
 #[cfg(test)]

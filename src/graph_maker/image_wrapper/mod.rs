@@ -1,16 +1,18 @@
 use std::io::Cursor;
 
 use chrono::{Datelike, TimeZone};
-use image::{Rgb, RgbImage};
+use png::Encoder;
 
 use crate::http::httperrors::HttpError;
 
+type Rgb = [u8; 3];
+
 const IMPORTANT_TIMES: &[f64] = &[7.0, 18.5, 19.5];
 
-const BACKGROUND_COLOR: Rgb<u8> = Rgb([255, 255, 255]);
-const LIGHT_AXIS_COLOR: Rgb<u8> = Rgb([127, 127, 127]);
-const DARK_AXIS_COLOR: Rgb<u8> = Rgb([16, 16, 16]);
-const BASE_GRAPH_LINE_COLOR: Rgb<u8> = Rgb([32, 64, 200]);
+const BACKGROUND_COLOR: Rgb = [255, 255, 255];
+const LIGHT_AXIS_COLOR: Rgb = [127, 127, 127];
+const DARK_AXIS_COLOR: Rgb = [16, 16, 16];
+const BASE_GRAPH_LINE_COLOR: Rgb = [32, 64, 200];
 
 const MAIN_LINE_THICKNESS: usize = 5;
 const GRAPH_LINE_THICKNESS: usize = 7;
@@ -18,7 +20,7 @@ const CIRCLE_OUTER_RADIUS: usize = 9;
 const CIRCLE_INNER_RADIUS: usize = 6;
 
 pub struct Imagen{
-    buffer: Vec<Rgb<u8>>,
+    buffer: Vec<Rgb>,
     width: usize,
     height: usize,
     x_min: i64,
@@ -145,11 +147,18 @@ impl Imagen {
 
     pub fn to_bytes(&self) -> Result<Vec<u8>, HttpError>{
         let graph = self.buffer.iter()
-            .flat_map(|pix| Vec::from(pix.0))
+            .flat_map(|pix| Vec::from(pix))
             .collect::<Vec<u8>>();
-        let image = RgbImage::from_raw(self.width as u32, self.height as u32, graph).ok_or(HttpError::InternalServerError("Wrong image buffer size for expected dimensions. Could not render image"))?;
         let mut buffer: Vec<u8> = Vec::new();
-        let _ = image.write_to(&mut Cursor::new(&mut buffer), image::ImageFormat::Png);
+        let mut cursor = Cursor::new(&mut buffer);
+        let mut encoder = Encoder::new(&mut cursor, self.width as u32, self.height as u32);
+        encoder.set_color(png::ColorType::Rgb);
+        encoder.set_depth(png::BitDepth::Eight);
+        encoder.set_source_gamma(png::ScaledFloat::new(1.0/2.2));
+
+        let mut writer = encoder.write_header().map_err(|_|HttpError::InternalServerError("Could not generate image header"))?;
+        writer.write_image_data(&graph).map_err(|_|HttpError::InternalServerError("Wrong image buffer size for expected dimensions. Could not render image"))?;
+        drop(writer);
 
         return Ok(buffer);
     }

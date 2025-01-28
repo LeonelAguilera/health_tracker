@@ -48,8 +48,6 @@ impl GraphType {
                         let date = row.get::<usize, i64>(0);
                         let value = row.get::<usize, f64>(1);
 
-                        println!("\t{date:#?}\t{value:#?}");
-
                         if let (Ok(date), Ok(value)) = (date, value){
                             Ok((date, value))
                         }

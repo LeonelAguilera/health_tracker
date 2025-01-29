@@ -164,13 +164,26 @@ pub fn build_graph_htmx_from_exercise_plan(plan: Vec<Ejercicio>) -> String{
                                 "##);
     for ejercicio in plan{
         let nombre_ejercicio = ejercicio.name;
-        let representacion_grafico = format!(r##"
-                                             <div class="graph-container">
-                                             <h3>{nombre_ejercicio}</h3>
-                                             <img src="graph/exercise_data/repetitions/exercise_name/{nombre_ejercicio}/multi/30/wset/1/2/3" alt="{nombre_ejercicio} graph" id="{nombre_ejercicio}-graph">
-                                             </div>
-                                             "##);
-        htmx.push_str(representacion_grafico.as_str());
+
+        if ejercicio.n_reps.len() <= 1{
+            let representacion_grafico = format!(r##"
+                                                 <div class="graph-container">
+                                                 <h3>{nombre_ejercicio}</h3>
+                                                 <img src="graph/exercise_data/repetitions/exercise_name/{nombre_ejercicio}/wset/1/simple/30/" alt="{nombre_ejercicio} graph" id="{nombre_ejercicio}-graph">
+                                                 </div>
+                                                 "##);
+            htmx.push_str(representacion_grafico.as_str());
+        }
+        else{
+            let sets = (0..ejercicio.n_reps.len()).map(|x| (x + 1).to_string()).collect::<Vec<_>>().join("/");
+            let representacion_grafico = format!(r##"
+                                                 <div class="graph-container">
+                                                 <h3>{nombre_ejercicio}</h3>
+                                                 <img src="graph/exercise_data/repetitions/exercise_name/{nombre_ejercicio}/multi/30/wset/{sets}" alt="{nombre_ejercicio} graph" id="{nombre_ejercicio}-graph">
+                                                 </div>
+                                                 "##);
+            htmx.push_str(representacion_grafico.as_str());
+        }
     }
 
     htmx.push_str("</div>");

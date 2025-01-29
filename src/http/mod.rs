@@ -82,7 +82,6 @@ impl RequestType{
 }
 
 pub fn simple_file_response(stream: TcpStream, path: &str){
-    println!("Path: {path}");
     file_response(stream, OK, path);
 }
 

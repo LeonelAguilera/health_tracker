@@ -43,10 +43,7 @@ fn connection_handler(stream: TcpStream, db: &Connection, exercise_plan: &mut Pl
         GET(contents) => match contents.query.as_str() {
             "/" => simple_file_response(stream, "html/index.html"),
             "/scale_data" => simple_file_response(stream, "html/templates/health_data.html"),
-            "/train_data" => {
-                let today_plan = exercise_plan.get_todays_list();
-                byte_stream_response(&stream, OK, Ok(build_graph_htmx_from_exercise_plan(today_plan).as_bytes().to_vec()))
-            },
+            "/train_data" => byte_stream_response(&stream, OK, Ok(build_graph_htmx_from_exercise_plan(exercise_plan.get_todays_list()).as_bytes().to_vec())),
             "/new_data_form" => simple_file_response(stream, "html/templates/new_data_form.html"),
             "/new_training" => {
                 let today_plan = exercise_plan.get_todays_list();
@@ -74,8 +71,7 @@ fn connection_handler(stream: TcpStream, db: &Connection, exercise_plan: &mut Pl
                 not_found(stream)
             },
         },
-        _ => {
-            not_found(stream)},
+        _ => not_found(stream),
     }
     println!("Served\n\n");
 }

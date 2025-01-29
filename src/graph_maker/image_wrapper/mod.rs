@@ -132,7 +132,7 @@ impl Imagen {
         if delta < 2.0{
             delta += 10.0;
         }
-        let denominador = 10.0f64.powf(delta.log10().floor() - 1.0);
+        let denominador = 10.0f64.powf((delta/2.0).log10().floor());
         let delta = delta.div_euclid(denominador) as usize;
 
         for i in 0..delta{

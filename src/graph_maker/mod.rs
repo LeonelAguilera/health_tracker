@@ -82,7 +82,6 @@ impl GraphType {
                         let return_val = statement.query_map(params_from_iter(parameters.iter()), |row| {
                             let date = row.get::<usize, i64>(0);
                             let value = row.get::<usize, f64>(1);
-                            println!("datos leidos:\n\t{date:#?}\n\t{value:#?}\n\n\n");
                             if let (Ok(date), Ok(value)) = (date, value){
                                 Ok((date, value))
                             }

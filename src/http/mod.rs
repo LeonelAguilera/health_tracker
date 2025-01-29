@@ -59,15 +59,11 @@ impl RequestType{
             query: parts[1].to_string(),
             _version: parts[2].to_string(),
             payload: {
-                if payload_size > 0{
+                (payload_size > 0).then(||{
                     let mut buf = vec![0; payload_size];
                     let _ = buf_reader.read_exact(&mut buf);
-
-                    Some(buf)
-                }
-                else{
-                    None
-                }
+                    buf
+                })
             },
         };
         match parts[0] {
@@ -86,6 +82,7 @@ impl RequestType{
 }
 
 pub fn simple_file_response(stream: TcpStream, path: &str){
+    println!("Path: {path}");
     file_response(stream, OK, path);
 }
 
@@ -94,7 +91,8 @@ pub fn not_found(stream: TcpStream){
 }
 
 pub fn file_response(stream: TcpStream, status_line: &str, path: &str){
-    byte_stream_response(&stream, status_line, fs::read_to_string(path).map_or_else(|_|Err(HttpError::InternalServerError("Could not read response file")), |file| Ok(file.into_bytes())));
+    byte_stream_response(&stream, status_line, fs::read(path)
+                         .map_err(|_| HttpError::InternalServerError("Could not read response file")));
 }
 
 pub fn byte_stream_response(mut stream: &TcpStream, status_line: &str, byte_stream: Result<Vec<u8>, HttpError>){

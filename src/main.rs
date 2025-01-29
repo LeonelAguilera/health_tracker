@@ -53,7 +53,8 @@ fn connection_handler(stream: TcpStream, db: &Connection, exercise_plan: &mut Pl
                 byte_stream_response(&stream, OK, today_plan[0].to_htmx_form(0, 0));
             },
             query if query.starts_with("/styles/") => simple_file_response(stream, &query[1..]),
-            query if query.starts_with("/graph/")  => {println!("Serving graph"); byte_stream_response(&stream, OK, graph_handler(db, query))},
+            query if query.starts_with("/graph/")  => byte_stream_response(&stream, OK, graph_handler(db, query)),
+            query if query.starts_with("/ilustration/") => simple_file_response(stream, &query[1..]),
             _ => {
                 not_found(stream)
             },
